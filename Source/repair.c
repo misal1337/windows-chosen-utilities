@@ -598,6 +598,7 @@ static void repairNotStarted(const wchar_t* why) {
 
 static void repairStart(int job, const wchar_t* wim) {
     if (!jobBegin()) return;
+    noteHide();                                    // the last job's result
     repairClear();
     g_repJob = job;                                // from here on the text and status are this job's
     g_repStatus[0] = 0;

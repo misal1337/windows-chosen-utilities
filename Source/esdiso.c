@@ -772,9 +772,8 @@ static void esdIsoOnDone(DWORD code) {
     BOOL logged = eiSaveLog(isoPath);
     swprintf(m, cch, L"Saved %s", PathFindFileNameW(isoPath));
     wchar_t msg[MAX_PATH * 2 + 160];
-    swprintf(msg, MAX_PATH * 2 + 160, L"%s\n\nSaved in %s%s", PathFindFileNameW(isoPath), g_eDir,
+    swprintf(msg, MAX_PATH * 2 + 160, L"%s\nSaved in %s%s", PathFindFileNameW(isoPath), g_eDir,
              logged ? L", with the output beside it as a .txt file of the same name." : L".");
     InvalidateRect(g_hwnd, NULL, FALSE);
-    PostMessageW(g_hwnd, WM_APP_RAISE, 0, 0);
-    okDialog(L"Windows ISO is ready", msg);
+    noteShow(L"Windows ISO is ready", msg);
 }

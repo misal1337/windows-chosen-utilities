@@ -2050,8 +2050,7 @@ static void dlStart(void) {
     repairStart(REP_UUP, spec);
 }
 
-// The job can run for an hour with the app in the background, so this comes to the front. The user asked for this
-// box, unlike the "no done box" rule for quick actions: a finished ISO is worth stopping for.
+
 // The panel's text, saved beside the ISO under the same name with .txt. It's written by this window, not the
 // administrator helper, so the file belongs to the user like anything else on their Desktop.
 static BOOL dlSaveLog(const wchar_t* isoPath) {
@@ -2077,6 +2076,7 @@ static BOOL dlSaveLog(const wchar_t* isoPath) {
     return ok;
 }
 
+// The job can run for an hour with the app in the background, so a notification in the app says it's done
 static void dlOnJobSucceeded(void) {
     size_t pre = wcslen(DL_SAVED_PREFIX);
     wchar_t msg[MAX_PATH * 2 + 128] = L"", isoPath[MAX_PATH * 2 + 2] = L"";
@@ -2089,10 +2089,9 @@ static void dlOnJobSucceeded(void) {
     if (!isoPath[0]) return;
     BOOL logged = dlSaveLog(isoPath);
     const wchar_t* slash = wcsrchr(isoPath, L'\\');
-    swprintf(msg, MAX_PATH * 2 + 128, L"%s\n\nIt's saved on your Desktop%s", slash ? slash + 1 : isoPath,
+    swprintf(msg, MAX_PATH * 2 + 128, L"%s\nIt's saved on your Desktop%s", slash ? slash + 1 : isoPath,
              logged ? L", with the conversion log beside it as a .txt file of the same name." : L".");
-    PostMessageW(g_hwnd, WM_APP_RAISE, 0, 0);
-    okDialog(L"Windows ISO is ready", msg);
+    noteShow(L"Windows ISO is ready", msg);
 }
 
 // Clears what a build cut short can leave: a mounted image, loaded hives, unfinished downloads

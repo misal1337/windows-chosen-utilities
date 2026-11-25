@@ -11,6 +11,7 @@
 #include "gfx.c"
 #include "sysutil.c"
 #include "dialog.c"
+#include "note.c"
 #include "cleanup.c"
 #include "uupapi.c"
 #include "dism.c"
@@ -116,6 +117,8 @@ static void render(void) {
     g_alphaMul = (g_fadeAct == FADE_THEME) ? g_fadeV : 1.0;
     drawRail(railL, railR, pad, g_bh - pad);
     g_alphaMul = (g_fadeAct == FADE_PAGE || g_fadeAct == FADE_THEME) ? g_fadeV : 1.0;
+    double noteV; int fullH = g_bh, reserve = noteReserve(contentL, contentR, &noteV);
+    g_bh -= reserve;                       // the page lays itself out in what the notification leaves
     if (g_page == PAGE_CLEANUP)     drawCleanup(contentL, contentR);
     else if (g_page == PAGE_REGNET) drawRegNet(contentL, contentR);
     else if (g_page == PAGE_RUNTI)  drawRunTI(contentL, contentR);
@@ -130,6 +133,8 @@ static void render(void) {
     else if (g_page == PAGE_REMOVE) drawRemove(contentL, contentR);
     else                            drawAio(contentL, contentR);
     g_alphaMul = 1.0;
+    g_bh = fullH;
+    noteDraw(contentL, contentR, reserve, noteV);
     // the version, small, in the margin under the pages' bottom-right corner
     RECT vr = { contentR - dp(160), g_bh - pad, contentR - dp(4), g_bh - dp(1) };
     drawText(g_fTiny, WCU_VERSION, vr, mutedRGB(), DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
@@ -203,6 +208,8 @@ static int hitSizeLink(int x, int y) {
 
 static int hitButton(int x, int y) {
     POINT p = { x, y };
+    if (g_noteOn && PtInRect(&g_rcNoteX, p)) return BTN_NOTEX;
+    if (g_noteOn && PtInRect(&g_rcNote, p)) return BTN_NOTE;      // nothing under the bar is clickable
     if (PtInRect(&g_rcUefi, p)) return BTN_UEFI;
     if (PtInRect(&g_rcUsbBoot, p)) return BTN_USBBOOT;
     if (PtInRect(&g_rcTheme, p)) return BTN_THEME;
@@ -389,7 +396,8 @@ static void onLeftButtonUp(int x, int y) {
     }
     int b = hitButton(x, y);
     if (b != -1 && b == g_pressBtn) {
-        if (b == BTN_RESCAN && g_busy == 0) startScan();
+        if (b == BTN_NOTEX) noteHide();
+        else if (b == BTN_RESCAN && g_busy == 0) startScan();
         else if (b == BTN_CLEAN && g_busy == 0 && anyChecked()) doClean();
         else if (b == BTN_REGOPEN) openRegeditAt(REGNET_KEY);
         else if (b == BTN_REGPURGE) doPurgeNetworks();
@@ -483,6 +491,7 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
 
     case WM_LBUTTONDOWN:
         g_pressBtn = hitButton(GET_X_LPARAM(l), GET_Y_LPARAM(l));
+        if (g_pressBtn == BTN_NOTEX || g_pressBtn == BTN_NOTE) return 0;
         if (pageHasFields()) aioMouseDown(GET_X_LPARAM(l), GET_Y_LPARAM(l));
         if (g_page == PAGE_REPAIR || g_page == PAGE_DOWNLOAD) repairMouseDown(GET_X_LPARAM(l), GET_Y_LPARAM(l));
         if (g_page == PAGE_APPS || g_page == PAGE_OFFICE) appsLogMouseDown(GET_X_LPARAM(l), GET_Y_LPARAM(l));

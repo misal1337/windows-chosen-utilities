@@ -1,4 +1,4 @@
-# Windows Chosen Utilities v1.7
+# Windows Chosen Utilities v1.8
 
 [![Download](https://img.shields.io/badge/Download-exe-0078D4?style=for-the-badge)](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 [![Latest release](https://img.shields.io/github/v/release/misal1337/windows-chosen-utilities?style=for-the-badge&label=version)](https://github.com/misal1337/windows-chosen-utilities/releases)
@@ -68,16 +68,9 @@ and run it. Nothing is installed.
 - To build from source: install [Zig](https://ziglang.org/download/) (no Visual Studio needed), then `cd Source`
   and run `.\build.ps1`.
 
-## Code signing policy
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
-*(Applied for; until it is approved, releases are unsigned.)*
-
-- Committers and reviewers: [misal1337](https://github.com/misal1337)
-- Approvers: [misal1337](https://github.com/misal1337)
-
-Every release exe is built by GitHub Actions from the source in this repository
-([build workflow](.github/workflows/build.yml)). Each signing request is approved by hand, and only files built
-from this repository are signed.
+## Release builds
+Releases are not code-signed. Since v1.6, every release exe is built by GitHub Actions from the source in this
+repository ([build workflow](.github/workflows/build.yml)).
 
 ## Privacy policy
 This program will not transfer any information to other networked systems unless specifically requested by the
@@ -144,3 +137,8 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
 - Runs on PCs whose processor lacks AVX2. Earlier release builds could crash at start on those.
 - If a job finishes while the window is minimized, its message opens on screen. Before, it opened off the screen
   and the app couldn't be clicked.
+
+**25 Nov 2026: v1.8**
+- Download Windows and ESD to ISO: a notification inside the app replaces the "Windows ISO is ready" box, so a
+  finished job never blocks the window. If the app isn't in front, its taskbar button flashes.
+- README: code signing section corrected. Releases are unsigned.

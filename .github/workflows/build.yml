@@ -21,7 +21,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install Zig 0.17.1 (checked against ziglang.org's published SHA-256)
+      # Saved by builds on main, and reused by them and by release tags. The key names the download's hash.
+      - name: Zig cache
+        id: zig
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/zig
+          key: zig-0.17.1-x86_64-windows-B03F477A1943673E
+
+      - name: Download Zig 0.17.1 (checked against ziglang.org's published SHA-256)
+        if: steps.zig.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           $url = 'https://ziglang.org/download/0.17.1/zig-x86_64-windows-0.17.1.zip'
@@ -29,7 +38,11 @@ jobs:
           $hash = (Get-FileHash "$env:RUNNER_TEMP\zig.zip" -Algorithm SHA256).Hash
           if ($hash -ne 'B03F477A1943673E02ACA0F570E8030DFFD536CE1F45CBC4D3326EC31159562E') { throw "Zig download hash mismatch: $hash" }
           Expand-Archive "$env:RUNNER_TEMP\zig.zip" $env:RUNNER_TEMP
-          "$env:RUNNER_TEMP\zig-x86_64-windows-0.17.1" | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          Rename-Item "$env:RUNNER_TEMP\zig-x86_64-windows-0.17.1" zig
+
+      - name: Put Zig on PATH
+        shell: pwsh
+        run: '"$env:RUNNER_TEMP\zig" | Out-File $env:GITHUB_PATH -Append -Encoding utf8'
 
       - name: Build
         shell: pwsh
