@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; Undoes MapNetworkDrivesDelay.reg: a clean Windows image doesn't have this value.
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\NetworkProvider]
+"RestoreConnection"=-

@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Turns off the three checkboxes in Settings > System > Notifications > Additional settings, for the current user.
+; 310093: welcome experience after updates. 338389: tips when using Windows. Scoobe: suggestions to finish setup.
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager]
+"SubscribedContent-310093Enabled"=dword:00000000
+"SubscribedContent-338389Enabled"=dword:00000000
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement]
+"ScoobeSystemSettingEnabled"=dword:00000000

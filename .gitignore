@@ -1,0 +1,6 @@
+# Build outputs: the exe is published on the Releases page, not in the repo
+*.exe
+*.pdb
+*.obj
+*.o
+*.ilk

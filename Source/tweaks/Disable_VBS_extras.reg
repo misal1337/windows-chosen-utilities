@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Runs after Disable_Virtualized_Based_Security.reg, which leaves these two on.
+; Memory Integrity has its own switch, and Credential Guard is on by default on some editions.
+; Microsoft says LsaCfgFlags must be set to 0: deleting it may not turn Credential Guard off.
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity]
+"Enabled"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa]
+"LsaCfgFlags"=dword:00000000

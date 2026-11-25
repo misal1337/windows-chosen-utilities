@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Undoes WU_Driver_Updates_Disable.reg: a clean Windows image has none of these policies.
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Device Metadata]
+"PreventDeviceMetadataFromNetwork"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DriverSearching]
+"SearchOrderConfig"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate]
+"ExcludeWUDriversInQualityUpdate"=-

@@ -1,0 +1,14 @@
+Windows Registry Editor Version 5.00
+
+; Puts back what Remove_Explore_background_context-menu_for_all_users.reg removes.
+; Values read from a clean Windows 11 26300.9457 image (install.wim, Pro).
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\DesktopBackground\Shell\.SpotlightLearnMore]
+"CommandStateSync"=""
+"ExplorerCommandHandler"="{5C6B744C-4CD1-5EA7-BDC6-0E6679A956BF}"
+"Position"="Bottom"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\DesktopBackground\Shell\.SpotlightNextImage]
+"CommandStateSync"=""
+"ExplorerCommandHandler"="{2ECAB2B4-B6A8-5482-0AE6-D1A5BF594B00}"
+"Position"="Bottom"

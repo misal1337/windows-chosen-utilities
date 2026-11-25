@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; Windows and apps both white, for the current user. The app tells Windows to apply it after importing this.
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize]
+"AppsUseLightTheme"=dword:00000001
+"SystemUsesLightTheme"=dword:00000001

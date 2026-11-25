@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Undoes Disable_Virtualized_Based_Security.reg and Disable_VBS_extras.reg.
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard]
+"EnableVirtualizationBasedSecurity"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity]
+"Enabled"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa]
+"LsaCfgFlags"=-
