@@ -1,4 +1,4 @@
-# Windows Chosen Utilities v1.6
+# Windows Chosen Utilities v1.7
 
 [![Download](https://img.shields.io/badge/Download-exe-0078D4?style=for-the-badge)](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 [![Latest release](https://img.shields.io/github/v/release/misal1337/windows-chosen-utilities?style=for-the-badge&label=version)](https://github.com/misal1337/windows-chosen-utilities/releases)
@@ -139,3 +139,8 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
   show one plain line instead of rows of 403 errors.
 - If a download fails, the error says how many links Microsoft refused in the last round.
 - Release builds are made by GitHub Actions, and the exe's file properties show its version.
+
+**25 Nov 2026: v1.7**
+- Runs on PCs whose processor lacks AVX2. Earlier release builds could crash at start on those.
+- If a job finishes while the window is minimized, its message opens on screen. Before, it opened off the screen
+  and the app couldn't be clicked.

@@ -125,6 +125,7 @@ static unsigned long long deleteContents(const wchar_t* dir) {
 // allowed to simply take over. Sharing the foreground thread's input state lifts that for this one call.
 // Windows refuses that when an administrator window is in front; returns TRUE then.
 static BOOL raiseWindow(HWND h) {
+    if (!IsWindowEnabled(h)) h = GetLastActivePopup(h);      // a dialog is open: it takes the focus, not the window it disabled
     DWORD me = GetCurrentThreadId(), fg = GetWindowThreadProcessId(GetForegroundWindow(), NULL);
     BOOL attached = fg && fg != me && AttachThreadInput(me, fg, TRUE);
     BringWindowToTop(h);
@@ -148,7 +149,7 @@ static void raiseTick(HWND h) {
         BOOL refused = raiseWindow(h);
         // Last resort, since it shows as a quick animation: restoring from the taskbar is always allowed the
         // foreground. It waits 300 ms, because after an approved prompt the elevated helper hands it over itself.
-        if (refused && g_raiseBounce == 0 && g_raiseTicks <= 12 && GetForegroundWindow() != h) {
+        if (refused && g_raiseBounce == 0 && g_raiseTicks <= 12 && (GetWindowThreadProcessId(GetForegroundWindow(), &pid), pid != GetCurrentProcessId())) {
             ShowWindow(h, SW_MINIMIZE);
             g_raiseBounce = 1;
         }

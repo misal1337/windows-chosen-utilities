@@ -508,13 +508,19 @@ static int showDialogEx(HWND owner, const wchar_t* title, const wchar_t* body,
     int W = dp(DLG_WIDTH), pad = dp(DLG_PAD);
     int H = pad + dp(28) + dp(12) + measureWrapped(g_fBody, body, W - pad * 2)
           + (nrows ? dp(16) + dp(DLG_ROW) * nrows + dp(8) : 0) + dlgExtraHeight(extra) + dp(24) + dp(DLG_FOOTER);
+    // A minimized window is at -32000,-32000: the dialog would open off the screen with the window disabled behind
+    // it, so the app looks hung.
+    if (owner && IsIconic(owner)) ShowWindow(owner, SW_RESTORE);
     RECT wa; SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0);
+    MONITORINFO mi = { sizeof(mi) };
+    if (owner && GetMonitorInfoW(MonitorFromWindow(owner, MONITOR_DEFAULTTONEAREST), &mi)) wa = mi.rcWork;
     RECT cr = wa;
-    if (owner) GetWindowRect(owner, &cr);
+    if (owner && !IsIconic(owner)) GetWindowRect(owner, &cr);
     if (H > (wa.bottom - wa.top) - dp(48)) H = (wa.bottom - wa.top) - dp(48);
     int x = cr.left + ((cr.right - cr.left) - W) / 2;
     int y = cr.top + ((cr.bottom - cr.top) - H) / 2;
-    if (y < wa.top) y = wa.top;
+    x = max(wa.left, min(x, wa.right - W));      // always wholly on the window's monitor
+    y = max(wa.top, min(y, wa.bottom - H));
 
     g_dlgDepth++;
     if (owner) { InvalidateRect(owner, NULL, FALSE); EnableWindow(owner, FALSE); }

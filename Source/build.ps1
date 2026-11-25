@@ -5,7 +5,8 @@ $zig = "$HOME\wcu-tools\zig\zig.exe"
 if (-not (Test-Path $zig)) { $zig = (Get-Command zig -ErrorAction Stop).Source }
 Set-Location $PSScriptRoot
 $out = 'Windows Chosen Utilities.exe'
-$args = @('cc','app.c','app.rc','-o',$out,'-O2','-municode',
+# baseline: without it Zig builds for the CPU doing the build (AVX2 and newer), and the exe crashes at start on PCs without those
+$args = @('cc','app.c','app.rc','-o',$out,'-O2','-municode','-mcpu=baseline',
   '-ldwmapi','-lgdi32','-luser32','-lshell32','-lole32','-lshlwapi','-lcomdlg32','-ladvapi32','-loleaut32','-luuid','-lvirtdisk','-ld2d1','-ldwrite','-lwinhttp','-lwintrust','-lcrypt32',
   '-Wl,/subsystem:windows')
 & $zig @args 2>&1 | ForEach-Object { "$_" }
