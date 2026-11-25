@@ -1,4 +1,4 @@
-# Turns lang.txt (one line per text: English|de|fr|es|pt-BR|zh-CN) into lang_data.inc. build.ps1 runs this every time.
+# Turns lang.txt (one line per text: English|de|fr|es|pt-BR|zh-CN|ru) into lang_data.inc. build.ps1 runs this every time.
 $ErrorActionPreference = 'Stop'
 $rows = @()
 $seen = @{}
@@ -7,7 +7,7 @@ foreach ($line in [IO.File]::ReadAllLines("$PSScriptRoot\lang.txt", [Text.Encodi
     $n++
     if ($n -eq 1 -or -not $line.Trim()) { continue }
     $c = $line.Split('|')
-    if ($c.Count -ne 6) { throw "lang.txt line ${n}: $($c.Count) columns, not 6" }
+    if ($c.Count -ne 7) { throw "lang.txt line ${n}: $($c.Count) columns, not 7" }
     if ($seen.ContainsKey($c[0])) { throw "lang.txt line ${n}: '$($c[0])' is listed twice" }
     $seen[$c[0]] = 1
     $want = (@([regex]::Matches($c[0], '\{\d\}') | ForEach-Object Value) | Sort-Object) -join ''

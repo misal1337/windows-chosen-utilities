@@ -7,7 +7,7 @@
 //   - the converter, 7zr and aria2c come from the manifests in UUP dump's misc repo, each checked against the
 //     SHA-256 listed there. The built-in copy of those details is only used if a manifest can't be read.
 //
-// To remove this page: set WCU_DOWNLOAD to 0 in core.h and delete this file. The other pages don't use anything
+// To remove this page: set WCU_DOWNLOAD to 0 in core.h and delete this file and dlprogress.c. The other pages don't use anything
 // in here. What's left elsewhere is unused names (REP_UUP, A_D_*, PAGE_DOWNLOAD) and search for WCU_DOWNLOAD finds
 // the rest. Its work folder, <Documents>\WCU_UUP (or C:\WCU_UUP when Documents can't be used), exists only while a
 // build runs. The UUP dump helpers it shares
@@ -1021,6 +1021,8 @@ static BOOL dlCheckEditions(const wchar_t* conv, const wchar_t* isoName, const D
     return ok;
 }
 
+#include "dlprogress.c"
+
 // ---------- the job itself ----------
 #define DL_STEP_TOOLS 1
 #define DL_STEP_DOWNLOAD 2
@@ -1411,6 +1413,8 @@ static DWORD dlDownloadGroup(const DlSpec* s, const wchar_t* eds, DlFile* files,
     if (!fin) { repWrite(out, L"Error: not enough memory.\r\n"); return ERROR_OUTOFMEMORY; }
     unsigned long long lastBytes = 0;
     DWORD code = 0, result = 1;
+    g_dlpGroup = 0;
+    for (int i = 0; i < n; i++) g_dlpGroup += files[i].size;
     for (int round = 1; round <= 20; round++) {
         int left = 0;
         for (int i = 0; i < n; i++) { fin[i] = dlFileDone(uups, &files[i]); if (!fin[i]) left++; }
@@ -1434,14 +1438,20 @@ static DWORD dlDownloadGroup(const DlSpec* s, const wchar_t* eds, DlFile* files,
         swprintf(cmd, MAX_PATH * 4 + 300,
                  L"\"%s\" --no-conf=true --async-dns=false -x16 -s16 -j%d -c -R --file-allocation=none --console-log-level=warn --download-result=hide --summary-interval=0 -d \"%s\" -i \"%s\"",
                  pAria, jobs, uups, listPath);
-        g_repAria = TRUE;
+        {   // what earlier rounds finished, or more if they left files part done, which aria2 carries on with
+            unsigned long long have = g_dlpBefore;
+            for (int i = 0; i < n; i++) if (fin[i]) have += files[i].size;
+            g_dlpRound = max(have, g_dlpLast);
+        }
+        g_repAria = TRUE; g_repTick = dlpOnTick; g_dlpTick = 0;
         DWORD e = repRunOnConsole(out, pAria, cmd, work, cancel, &code);
-        g_repAria = FALSE;
+        g_repAria = FALSE; g_repTick = NULL;
         if (e) { swprintf(line, 600, L"Error: couldn't start aria2c (error %lu).\r\n", e); repWrite(out, line); result = e; break; }
         if (code == ERROR_CANCELLED) { result = ERROR_CANCELLED; break; }
         if (code == 0) { result = 0; break; }                    // aria2 finished every file in its list and checked it
     }
     free(fin);
+    if (result == 0) { g_dlpLast = g_dlpBefore += g_dlpGroup; dlpReport(out); }
     if (result == 1) {
         swprintf(line, 600, L"\r\nError: the download failed (aria2c exit code %lu), and fresh links didn't get it any further.\r\n", code);
         repWrite(out, line);
@@ -1583,6 +1593,8 @@ static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
     swprintf(line, 600, L"%d files, %s. Finished files are checked against their checksums.\r\n", nFiles, tot);
     repWrite(out, line);
 
+    g_dlpAll = total; g_dlpBefore = g_dlpLast = 0;
+    dlpReport(out);
     DWORD dr = dlDownloadAll(&s, edAll, files, nEd, nFiles, pAria, uups, work, cancel, out);
     if (dr == ERROR_CANCELLED) goto stopped;
     if (dr) goto done;
@@ -2047,7 +2059,19 @@ static void dlStart(void) {
     dlAppsSpec(apps, DL_APPS_CCH);
     swprintf(spec, REP_ARG_MAX, L"%s|%s|%s|%s|%s|%s|%s", g_dlCur.uuid, g_dlLangCode, eds, virt, desktop, g_dlCancelEv ? evName : L"", apps);
     g_repShow = TRUE;
+    int nImg = 0, nVirt = 0; BOOL pro = FALSE;
+    for (int i = 0; i < g_dlEdN; i++) if (g_dlEd[i].checked) { nImg++; if (!_wcsicmp(g_dlEd[i].code, L"PROFESSIONAL")) pro = TRUE; }
+    for (int i = 0; i < DL_NVIRTUAL; i++) if (g_dlVirt[i]) nVirt++;
+    double pace = dlpLoadPace();
+    EnterCriticalSection(&g_lock);
+    dlpBegin(&g_dlp, nImg + (nVirt && !pro), nVirt, pace, GetTickCount64());   // before the job: its first words come at once
+    LeaveCriticalSection(&g_lock);
     repairStart(REP_UUP, spec);
+    if (!g_repRunning) { dlpHide(); return; }
+    EnterCriticalSection(&g_lock);
+    g_dlp.t0 = GetTickCount64();        // waiting at the UAC prompt isn't the job's time
+    LeaveCriticalSection(&g_lock);
+    SetTimer(g_hwnd, TIMER_DLP, 1000, NULL);
 }
 
 
@@ -2102,6 +2126,7 @@ static void dlCleanPressed(void) {
             L"mounted, unloads that image's registry hives, and deletes the unfinished downloads and temporary folders.",
             NULL, 0, L"Clean up", L"Cancel", 1)) return;
     g_repShow = TRUE;
+    dlpHide();
     repairStart(REP_UUP, L"cleanup");
 }
 
@@ -2164,6 +2189,8 @@ static void drawDownload(int cL, int cR) {
     drawText(jobOn || ready ? g_fBodyBold : g_fBody,
              jobOn ? L"UUP Converter is running. Do not turn off your PC" : ready ? g_dlReady : L"Builds a bootable Windows ISO on your Desktop, using UUP dump",
              t2, jobOn ? RGB(232, 72, 85) : ready ? noteGreen() : mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+    if (jobOn || ready) dlpDraw(x1, x2, cL + dp(84) + textWidth(g_fH1, L"Download Windows") + dp(12), top);
 
     // the heading, and the architecture: x64 or arm64, one always chosen. The buttons match Find's size and line up
     // with its right edge.

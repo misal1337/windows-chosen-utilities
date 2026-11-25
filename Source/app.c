@@ -301,11 +301,11 @@ static void bootToFirmware(void) {
 
 // The language list: Follow Windows, then each language under its own name
 static void langPick(void) {
-    const wchar_t* items[7] = { L"Follow Windows" };
-    for (int i = 0; i < 6; i++) items[i + 1] = LANG_LIST[i].name;
+    const wchar_t* items[LANG_N + 1] = { L"Follow Windows" };
+    for (int i = 0; i < LANG_N; i++) items[i + 1] = LANG_LIST[i].name;
     int pick = g_langSet + 1;
     DlgExtra list; memset(&list, 0, sizeof(list));
-    list.items = items; list.nItems = 7; list.pick = &pick;
+    list.items = items; list.nItems = LANG_N + 1; list.pick = &pick;
     if (!showDialogEx(g_hwnd, L"Language", L"Choose the app's language. Logs and output boxes stay in English.",
                       NULL, 0, L"Choose", L"Cancel", 0, &list)) return;
     langChoose(pick - 1);

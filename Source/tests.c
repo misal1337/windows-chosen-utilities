@@ -130,6 +130,43 @@ int wmain(void) {
         // no DISM command may be able to stop and ask about restarting: nobody could answer it
         BOOL noPrompt = wcsstr(c, L"/NoRestart") && wcsstr(REP_SCAN_CMD.cmd, L"/NoRestart") && wcsstr(REP_RESTORE_CMD.cmd, L"/NoRestart");
         static const int JOBS[] = { REP_SFC, REP_SCAN, REP_RESTORE, REP_WUC, REP_RSON, REP_RSOFF };
+#if WCU_DOWNLOAD
+    {
+        static const struct { int at; const wchar_t* s; } RUN[] = {
+            { 0, L"=== Checking UUP Info . . ." }, { 40, L"=== Creating install.wim . . ." }, { 100, L"=== Updating install.wim / 2 image{s} . . ." },
+            { 120, L"=== Servicing Index: 1" }, { 160, L"=== Adding Microsoft Edge . . ." }, { 160, L"=== Adding Apps . . ." }, { 321, L"=== Adding Updates . . ." },
+            { 341, L"=== Adding LCU 09818-Windows11.0-KB5127936-x64.msu" }, { 1102, L"=== Servicing Index: 2" }, { 1142, L"=== Adding Microsoft Edge . . ." },
+            { 1142, L"=== Adding Apps . . ." }, { 1302, L"=== Adding Updates . . ." }, { 1322, L"=== Adding LCU 09818-Windows11.0-KB5127936-x64.msu" },
+            { 2364, L"=== Rebuilding install.wim . . ." }, { 2384, L"=== Creating winre.wim . . ." }, { 2444, L"=== Remounting image . . ." }, { 2444, L"=== Adding LCU for boot.wim . . ." },
+            { 2464, L"=== Adding LCU 09818-Windows11.0-KB5127936-x64.msu" }, { 2645, L"=== Adding winre.wim to install.wim . . ." }, { 2665, L"=== Creating ISO . . ." } };
+        BOOL ok = TRUE;
+        for (int slow = 1; slow <= 3; slow++) {                     // the same PC, then ones two and three times slower
+            DlProg p; ULONGLONG t = 1000000;
+            dlpBegin(&p, 2, 0, 1, t);
+            dlpStep(&p, 1, t); dlpStep(&p, 2, t + 20000);
+            for (int s = 0; s <= 600; s++) dlpBytes(&p, 16000000ULL * s, 9600000000ULL, t + 40000 + s * 1000ULL);
+            ULONGLONG c = t + 640000, end = c + 2685000ULL * slow; int last = 0, k = 0;
+            dlpStep(&p, 3, c);
+            for (ULONGLONG n = c; n < end; n += 60000) {
+                for (; k < (int)(sizeof(RUN) / sizeof(RUN[0])) && c + RUN[k].at * 1000ULL * slow <= n; k++) dlpLine(&p, RUN[k].s, c + RUN[k].at * 1000ULL * slow);
+                double left = dlpLeft(&p, n), real = (end - n) / 1000.0; int pct = dlpPercent(&p, n);
+                if (pct < last || pct > 99) ok = FALSE;
+                last = pct;
+                if ((n - c) % 600000 == 0) { wchar_t x[160]; dlpText(&p, n, x, 160); wprintf(L"  x%d  %s  (really %.0f min)\n", slow, x, real / 60); }
+                if (slow == 1 && fabs(left - real) > 420) ok = FALSE;                                  // within 7 minutes all the way
+                if (slow > 1 && n - c > (end - c) / 2 && fabs(left - real) > real * 0.35 + 240) ok = FALSE;   // learned by halfway
+            }
+            if (!p.sawLcu || !p.inTail) ok = FALSE;
+        }
+        // a report cut in two by the pipe isn't shown as text, and counts
+        repairClear(); dlpBegin(&g_dlp, 1, 0, 1, GetTickCount64());
+        wchar_t m1[] = { 'a', REP_PROG_MARK, '1', '2' }, m2[] = { '/', '5', '0', REP_PROG_END, 'b' };
+        repairFeed(m1, 4); repairFeed(m2, 5);
+        if (g_repN != 1 || wcscmp(g_repLines[0].s, L"ab") || g_dlp.got != 12 || g_dlp.total != 50) ok = FALSE;
+        g_dlp.on = FALSE; repairClear();
+        wprintf(L"download progress test: %s\n", ok ? L"PASS" : L"FAIL");
+    }
+#endif
         for (size_t j = 0; j < sizeof(JOBS) / sizeof(JOBS[0]); j++) {
             int n = 0; const RepCmd* list = repJobCmds(JOBS[j], &n);
             if (!list || n < 1) noPrompt = FALSE;

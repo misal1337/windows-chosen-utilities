@@ -3,17 +3,19 @@
 // once. lang.txt holds the translations (lang.ps1 turns it into lang_data.inc at build time). A key is the whole
 // English text; {1}, {2}... stand for the parts that vary, and a translation may reorder them. Text with no entry stays
 // English. Output boxes use g_fMono, which is never translated, and neither is what's typed in a box (g_trOff).
-typedef struct { const wchar_t* s[6]; } LangRow;      // English first, then in LANG_LIST's order
+#define LANG_N 7
+typedef struct { const wchar_t* s[LANG_N]; } LangRow; // English first, then in LANG_LIST's order
 #include "lang_data.inc"
 
 typedef struct { const wchar_t* code; const wchar_t* name; WORD primary; } LangInfo;
-static const LangInfo LANG_LIST[6] = {
+static const LangInfo LANG_LIST[LANG_N] = {
     { L"en",    L"English",                        LANG_ENGLISH },
     { L"de",    L"Deutsch",                        LANG_GERMAN },
     { L"fr",    L"Français",                  LANG_FRENCH },
     { L"es",    L"Español",                   LANG_SPANISH },
     { L"pt-BR", L"Português (Brasil)",        LANG_PORTUGUESE },
     { L"zh-CN", L"简体中文",       LANG_CHINESE },
+    { L"ru",    L"Русский",       LANG_RUSSIAN },
 };
 static int  g_lang = 0;          // index into LANG_LIST
 static int  g_langSet = -1;      // what was chosen: -1 follows Windows
@@ -112,7 +114,7 @@ static int langOfWindows(void) {
     LANGID id = GetUserDefaultUILanguage();
     if (PRIMARYLANGID(id) == LANG_CHINESE)             // only Simplified is here; Traditional readers get English
         return (SUBLANGID(id) == SUBLANG_CHINESE_SIMPLIFIED || SUBLANGID(id) == SUBLANG_CHINESE_SINGAPORE) ? 5 : 0;
-    for (int i = 0; i < 6; i++) if (LANG_LIST[i].primary == PRIMARYLANGID(id)) return i;
+    for (int i = 0; i < LANG_N; i++) if (LANG_LIST[i].primary == PRIMARYLANGID(id)) return i;
     return 0;
 }
 static const wchar_t* LANG_KEY = L"Software\\WindowsChosenUtilities";
@@ -120,7 +122,7 @@ static void langLoad(void) {
     wchar_t code[16] = L""; DWORD cb = sizeof(code);
     g_langSet = -1;
     if (RegGetValueW(HKEY_CURRENT_USER, LANG_KEY, L"Language", RRF_RT_REG_SZ, NULL, code, &cb) == ERROR_SUCCESS)
-        for (int i = 0; i < 6; i++) if (!_wcsicmp(code, LANG_LIST[i].code)) g_langSet = i;
+        for (int i = 0; i < LANG_N; i++) if (!_wcsicmp(code, LANG_LIST[i].code)) g_langSet = i;
     g_lang = g_langSet < 0 ? langOfWindows() : g_langSet;
 }
 static void langChoose(int set) {

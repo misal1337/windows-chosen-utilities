@@ -1,4 +1,4 @@
-# Windows Chosen Utilities v1.9
+# Windows Chosen Utilities v1.10
 
 [![Download](https://img.shields.io/badge/Download-exe-0078D4?style=for-the-badge)](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 [![Latest release](https://img.shields.io/github/v/release/misal1337/windows-chosen-utilities?style=for-the-badge&label=version)](https://github.com/misal1337/windows-chosen-utilities/releases)
@@ -149,3 +149,9 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
 - The translations haven't been checked by native speakers, and some messages are still in English. Corrections are
   welcome: they're all in [lang.txt](Source/lang.txt).
 - Download Windows: a dropped connection shows one line in the output instead of dozens.
+
+**25 Nov 2026: v1.10**
+- Russian added (not yet checked by a native speaker; corrections are welcome in [lang.txt](Source/lang.txt)).
+- Download Windows: a progress bar, the elapsed time and an estimate of the time left for the whole job. The estimate
+  learns this PC's conversion speed after the first build.
+- Version numbers now run to x.19 before the next whole number.

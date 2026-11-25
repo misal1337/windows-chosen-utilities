@@ -15,6 +15,8 @@ enum { REP_NONE, REP_SFC, REP_SCAN, REP_RESTORE, REP_WIM, REP_UUP, REP_WUC, REP_
 #define REP_MAX_LINES   6000
 #define REP_MAX_LINE    8000
 #define REP_STEP_MARK   1         // written ahead of each command; command output can't contain it
+#define REP_PROG_MARK   2         // Download Windows: <mark>bytes/total<end>, never shown as text
+#define REP_PROG_END    3
 
 typedef struct { const wchar_t* tool; const wchar_t* cmd; } RepCmd;
 // /NoRestart: when a restart is pending, DISM otherwise ends by asking "restart now? (Y/N)" on its console.
@@ -296,6 +298,8 @@ static void repStartFailed(HANDLE out, const wchar_t* exe, const wchar_t* cwd, D
     repWrite(out, line);
 }
 
+static void (*g_repTick)(HANDLE proc, HANDLE out) = NULL;     // if set, called about ten times a second while the tool runs
+
 static DWORD repRunOnConsole(HANDLE out, const wchar_t* exe, wchar_t* cmd, const wchar_t* cwd, HANDLE cancel, DWORD* code) {
     HANDLE conIn = NULL, conOut = NULL, job = NULL; PROCESS_INFORMATION pi;
     DWORD err = repConsoleOpen(&conIn, &conOut);
@@ -334,6 +338,7 @@ static DWORD repRunOnConsole(HANDLE out, const wchar_t* exe, wchar_t* cmd, const
             break;
         }
         repRelayScreen(conOut, out, &sent, shown);
+        if (g_repTick) g_repTick(pi.hProcess, out);
     }
     repRelayScreen(conOut, out, &sent, shown);   // whatever it printed just before it ended
     if (g_repAria) {
@@ -474,6 +479,21 @@ static BOOL g_repCR = FALSE;              // a carriage return is waiting: a new
 static volatile LONG g_repStep = 0;
 static volatile LONG g_repPosted = 0;
 
+#if WCU_DOWNLOAD
+static void dlpFeedLine(const wchar_t* s);      // dlprogress.c
+static void dlpFeedStep(int step);
+static void dlpFeedBytes(const wchar_t* s);
+static void dlpEnd(BOOL ok);
+#endif
+static wchar_t g_repProg[64];              // a progress report part-way in: one can be cut in two by the pipe
+static int  g_repProgN = -1;               // -1: not inside one
+
+// The last line is whole
+static void repLineDone(void) {
+#if WCU_DOWNLOAD
+    if (g_repLines[g_repN - 1].s) dlpFeedLine(g_repLines[g_repN - 1].s);
+#endif
+}
 static void repLineNew(void) {
     if (g_repN >= REP_MAX_LINES) {        // keep the newest lines of a very long run
         for (int i = 0; i < 500; i++) free(g_repLines[i].s);
@@ -501,17 +521,33 @@ static void repairFeed(const wchar_t* s, int n) {
     if (g_repN == 0) repLineNew();
     for (int i = 0; i < n; i++) {
         wchar_t c = s[i];
-        if (c == REP_STEP_MARK) { g_repStep++; continue; }
+        if (c == REP_PROG_MARK) { g_repProgN = 0; continue; }
+        if (g_repProgN >= 0) {
+            if (c == REP_PROG_END || g_repProgN >= 63) {
+                g_repProg[g_repProgN] = 0; g_repProgN = -1;
+#if WCU_DOWNLOAD
+                dlpFeedBytes(g_repProg);
+#endif
+            } else g_repProg[g_repProgN++] = c;
+            continue;
+        }
+        if (c == REP_STEP_MARK) {
+            g_repStep++;
+#if WCU_DOWNLOAD
+            dlpFeedStep((int)g_repStep);
+#endif
+            continue;
+        }
         if (g_repCR) {
             if (c == L'\r') continue;
             g_repCR = FALSE;
-            if (c == L'\n') { repLineNew(); continue; }
+            if (c == L'\n') { repLineDone(); repLineNew(); continue; }
             RepLine* l = &g_repLines[g_repN - 1];
             l->len = 0;
             if (l->s) l->s[0] = 0;
         }
         if (c == L'\r') { g_repCR = TRUE; continue; }
-        if (c == L'\n') { repLineNew(); continue; }
+        if (c == L'\n') { repLineDone(); repLineNew(); continue; }
         repLineAdd(c);
     }
     LeaveCriticalSection(&g_lock);
@@ -519,7 +555,7 @@ static void repairFeed(const wchar_t* s, int n) {
 static void repairClear(void) {
     EnterCriticalSection(&g_lock);
     for (int i = 0; i < g_repN; i++) free(g_repLines[i].s);
-    g_repN = 0; g_repCR = FALSE; g_repStep = 0;
+    g_repN = 0; g_repCR = FALSE; g_repStep = 0; g_repProgN = -1;
     LeaveCriticalSection(&g_lock);
 }
 
@@ -598,6 +634,7 @@ static void repairOnDone(DWORD code) {
     if (failed || code > (REP_RESTART_BIT | 0xFF)) g_repShow = TRUE;
     InvalidateRect(g_hwnd, NULL, FALSE);
 #if WCU_DOWNLOAD
+    if (g_repJob == REP_UUP) dlpEnd(code == 0);
     if (g_repJob == REP_UUP && code == 0) dlOnJobSucceeded();
 #endif
     if (g_repJob == REP_ESDISO) esdIsoOnDone(code);
