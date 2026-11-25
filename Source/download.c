@@ -549,22 +549,32 @@ static BOOL dlAddEditionFiles(const char* resp, DlFile* files, int* count, wchar
     return TRUE;
 }
 
+static int __cdecl dlBySize(const void* a, const void* b) {
+    const DlFile* x = *(const DlFile* const*)a; const DlFile* y = *(const DlFile* const*)b;
+    if (x->size != y->size) return x->size < y->size ? -1 : 1;
+    return x < y ? -1 : x > y;
+}
+// Smallest first: their links expire soonest, and behind the big files they'd wait too long on a slow connection.
 // skip: NULL, or TRUE for files left out of this list (already finished)
 static BOOL dlWriteAriaList(const wchar_t* path, const DlFile* files, int n, const BOOL* skip) {
     HANDLE f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f == INVALID_HANDLE_VALUE) return FALSE;
     BOOL ok = TRUE; DWORD wr;
     char* line = (char*)malloc(4096);
-    for (int i = 0; ok && line && i < n; i++) {
-        if (skip && skip[i]) continue;
-        char name[480]; dlNarrow(files[i].name, name, 480);
-        int len = files[i].sha256[0]
-            ? snprintf(line, 4096, "%s\n  out=%s\n  checksum=sha-256=%s\n\n", files[i].url, name, files[i].sha256)
-            : snprintf(line, 4096, "%s\n  out=%s\n  checksum=sha-1=%s\n\n", files[i].url, name, files[i].sha1);
+    const DlFile** order = (const DlFile**)malloc(((size_t)n + 1) * sizeof(*order));
+    int m = 0;
+    for (int i = 0; order && i < n; i++) if (!skip || !skip[i]) order[m++] = &files[i];
+    if (order) qsort(order, (size_t)m, sizeof(*order), dlBySize);
+    for (int i = 0; ok && line && i < m; i++) {
+        const DlFile* d = order[i];
+        char name[480]; dlNarrow(d->name, name, 480);
+        int len = d->sha256[0]
+            ? snprintf(line, 4096, "%s\n  out=%s\n  checksum=sha-256=%s\n\n", d->url, name, d->sha256)
+            : snprintf(line, 4096, "%s\n  out=%s\n  checksum=sha-1=%s\n\n", d->url, name, d->sha1);
         ok = len > 0 && len < 4096 && WriteFile(f, line, (DWORD)len, &wr, NULL);
     }
-    if (!line) ok = FALSE;
-    free(line);
+    if (!line || !order) ok = FALSE;
+    free(line); free(order);
     CloseHandle(f);
     return ok;
 }
@@ -1424,7 +1434,9 @@ static DWORD dlDownloadGroup(const DlSpec* s, const wchar_t* eds, DlFile* files,
         swprintf(cmd, MAX_PATH * 4 + 300,
                  L"\"%s\" --no-conf=true --async-dns=false -x16 -s16 -j%d -c -R --file-allocation=none --console-log-level=warn --download-result=hide --summary-interval=0 -d \"%s\" -i \"%s\"",
                  pAria, jobs, uups, listPath);
+        g_repAria = TRUE;
         DWORD e = repRunOnConsole(out, pAria, cmd, work, cancel, &code);
+        g_repAria = FALSE;
         if (e) { swprintf(line, 600, L"Error: couldn't start aria2c (error %lu).\r\n", e); repWrite(out, line); result = e; break; }
         if (code == ERROR_CANCELLED) { result = ERROR_CANCELLED; break; }
         if (code == 0) { result = 0; break; }                    // aria2 finished every file in its list and checked it
@@ -1433,6 +1445,10 @@ static DWORD dlDownloadGroup(const DlSpec* s, const wchar_t* eds, DlFile* files,
     if (result == 1) {
         swprintf(line, 600, L"\r\nError: the download failed (aria2c exit code %lu), and fresh links didn't get it any further.\r\n", code);
         repWrite(out, line);
+        if (g_repRefused) {
+            swprintf(line, 600, L"Microsoft refused %d links (403) in the last round.\r\n", g_repRefused);
+            repWrite(out, line);
+        }
     }
     return result;
 }

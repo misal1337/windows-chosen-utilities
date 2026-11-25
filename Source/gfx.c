@@ -228,6 +228,32 @@ static int textWidthN(WFont font, const wchar_t* s, int n) {
 }
 static int textWidth(WFont font, const wchar_t* s) { return textWidthN(font, s, (int)wcslen(s)); }
 
+// Where a row of monospaced text ends, so words aren't cut: returns how many characters from off the row shows, and
+// sets *next to where the following row starts. Breaks at a space, between the [..][..] parts of a progress line, or
+// inside a word too long for any row after / \ & or ?. A word with none of those is cut as a last resort.
+static int wrapRow(const wchar_t* s, int len, int off, int room, int* next) {
+    if (len - off <= room) { *next = len; return len - off; }
+    int e = off + room, f = off, sp = 0, cut = 0;
+    if (s[0] == L'[')
+        for (int k = e; k > off + 1; k--)
+            if (s[k] == L'[' && (s[k - 1] == L']' || (s[k - 1] == L' ' && s[k - 2] == L']'))) {
+                *next = k;
+                return (s[k - 1] == L' ' ? k - 1 : k) - off;
+            }
+    while (f < e && s[f] == L' ') f++;                     // indentation isn't a place to break
+    for (int k = e; k > f; k--) if (s[k] == L' ') { sp = k; break; }
+    int w = sp ? sp : f, n = 0;
+    while (w < len && s[w] == L' ') w++;
+    while (n <= room && w + n < len && s[w + n] != L' ') n++;
+    if (!sp || n > room)
+        for (int k = e; k > w + 1; k--)
+            if (wcschr(L"/\\&?", s[k - 1]) && s[k] != L'/' && s[k] != L'\\') { cut = k; break; }
+    if (cut || !sp) { *next = cut ? cut : e; return *next - off; }
+    while (sp > off && s[sp - 1] == L' ') sp--;
+    *next = w;
+    return sp - off;
+}
+
 // ---------- fonts / theme ----------
 static const wchar_t* pickFamily(const wchar_t* wanted, const wchar_t* fallback) {
     IDWriteFontCollection* c = NULL; UINT32 idx = 0; BOOL found = FALSE;

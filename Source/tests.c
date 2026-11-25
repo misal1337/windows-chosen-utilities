@@ -161,7 +161,43 @@ int wmain(void) {
         // DISM's closing message gets its own line; a bar alone or other progress text is left whole
         wchar_t r1[] = L"[==100.0%==] No corruption", r2[] = L"[==100.0%==]", r3[] = L"Verification 5% complete.";
         BOOL barOk = repBarMessage(r1) == r1 + 13 && !repBarMessage(r2) && !repBarMessage(r3);
-        BOOL repPass = pickOk && cmdOk && feedOk && stepOk && barOk;
+        // rows end between words or progress parts, lose nothing but spaces, and always fit
+        const wchar_t* WR[] = { L"Downloading the Windows files: 98 files, 5 at a time. Getting fresh links for them first.",
+            L"[DL:1.9MiB][#899749 165MiB/171MiB(96%)][#feff89 22MiB/27MiB(82%)] [Checksum:#06372c 67MiB/151MiB(44%)]",
+            L"      indented   text   with   gaps and trailing spaces                                              ",
+            L"URI=http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/55637849-0c2a?P1=1795591931&P2=404",
+            L"nospacesatallnospacesatallnospacesatallnospacesatallnospacesatallnospacesatall", L"                                  " };
+        BOOL wrapOk = TRUE;
+        for (int i = 0; i < 6; i++) for (int room = 10; room < 120; room++) {
+            int len = (int)wcslen(WR[i]), off = 0, next = 0, guard = 0;
+            while (off < len && guard++ < 300) {
+                int n = wrapRow(WR[i], len, off, room, &next);
+                if (n < 0 || n > room || next <= off || next > len || next < off + n) { wrapOk = FALSE; break; }
+                for (int k = off + n; k < next; k++) if (WR[i][k] != L' ') wrapOk = FALSE;
+                if (i == 0 && room >= 12 && next < len && WR[i][next - 1] != L' ') wrapOk = FALSE;
+                if (i == 1 && room >= 40 && next < len && WR[i][next] != L'[') wrapOk = FALSE;
+                off = next;
+            }
+            if (off != len) wrapOk = FALSE;
+        }
+
+        // a 403 report becomes one plain line; any other error comes through whole
+        wchar_t af[MAX_PATH]; swprintf(af, MAX_PATH, L"%swcu_aria_%lu.txt", base, GetCurrentProcessId());
+        HANDLE aw = CreateFileW(af, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_FLAG_DELETE_ON_CLOSE, NULL);
+        const wchar_t* AR[] = { L"[DL:5MiB][#a 1MiB/2MiB(50%)]", L"", L"11/25 07:34:39 [ERROR] CUID#1 - Download aborted. URI=http://x", L"Exception: [A.cc:351] errorCode=22 URI=http://x", L"  -> [H.cc:239] errorCode=22 The response status is not successful. status=403",
+            L"[DL:6MiB][#a 1MiB/2MiB(60%)]", L"11/25 07:34:40 [ERROR] CUID#2 - Download aborted. URI=http://y", L"Exception: [A.cc:351] errorCode=22 URI=http://y", L"  -> [H.cc:239] errorCode=22 The response status is not successful. status=403",
+            L"11/25 07:34:41 [ERROR] CUID#3 - Download aborted. URI=http://z", L"Exception: [A.cc:351] errorCode=3 URI=http://z", L"  -> [H.cc:239] errorCode=3 Resource not found. status=404", L"other text" };
+        g_repRefused = g_repHeldN = 0;
+        for (int i = 0; i < 13; i++) repAriaRow(aw, AR[i]);
+        repAriaFlush(aw);
+        static wchar_t ab[8192]; DWORD ag = 0;
+        SetFilePointer(aw, 0, NULL, FILE_BEGIN); ReadFile(aw, ab, sizeof(ab) - 2, &ag, NULL); CloseHandle(aw);
+        repairFeed(ab, (int)(ag / sizeof(wchar_t)));
+        BOOL ariaOk = g_repRefused == 2 && g_repN == 6 && wcsstr(g_repLines[0].s, L"expired") && wcsstr(g_repLines[1].s, L"CUID#3")
+                   && wcsstr(g_repLines[3].s, L"404") && !wcscmp(g_repLines[4].s, L"other text");
+        repairClear();
+        if (!wrapOk || !ariaOk) wprintf(L"wrap %d aria %d lines %d\n", wrapOk, ariaOk, g_repN);
+        BOOL repPass = pickOk && cmdOk && feedOk && stepOk && barOk && wrapOk && ariaOk;
         wprintf(L"repair test: %s (pick %d cmd %d feed %d step %d bar %d)\n", repPass ? L"PASS" : L"FAIL",
                 pickOk, cmdOk, feedOk, stepOk, barOk);
         filePass = filePass && repPass;

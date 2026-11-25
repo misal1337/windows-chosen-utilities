@@ -195,6 +195,43 @@ static wchar_t* repBarMessage(wchar_t* row) {
     return (end && end[2]) ? end + 2 : NULL;
 }
 
+// aria2's report of a link Microsoft refused with 403 (they expire after a few minutes) is several rows of raw text
+// per file. While g_repAria is set, its rows go through here: a 403 report is counted and left out, with one plain
+// line in its place, and every other error is passed on whole. Progress rows overwrite each other.
+#define REP_HELD_MAX 16
+static BOOL g_repAria = FALSE;
+static int  g_repRefused = 0, g_repHeldN = 0;
+static wchar_t g_repHeld[REP_HELD_MAX][REP_CON_WIDTH + 1];
+
+static BOOL repAriaProgress(const wchar_t* t) {
+    return !t[0] || !wcsncmp(t, L"[DL:", 4) || !wcsncmp(t, L"[#", 2) || !wcsncmp(t, L"[Checksum:", 10);
+}
+static void repRowOut(HANDLE out, const wchar_t* text) {
+    repWrite(out, L"\r"); repWrite(out, text); repWrite(out, L"\r\n");
+}
+static void repAriaFlush(HANDLE out) {
+    for (int i = 0; i < g_repHeldN; i++) repRowOut(out, g_repHeld[i]);
+    g_repHeldN = 0;
+}
+// One finished row
+static void repAriaRow(HANDLE out, const wchar_t* text) {
+    BOOL start = wcsstr(text, L"[ERROR] CUID#") && wcsstr(text, L"Download aborted");
+    if (start || (g_repHeldN && repAriaProgress(text) && text[0])) repAriaFlush(out);
+    if (!start && !g_repHeldN) {
+        if (!repAriaProgress(text)) repRowOut(out, text);
+        else if (text[0]) { repWrite(out, L"\r"); repWrite(out, text); }
+        return;
+    }
+    if (!wcsncmp(text, L"  -> ", 5) && wcsstr(text, L"status=403")) {
+        g_repHeldN = 0;
+        if (!g_repRefused++)
+            repRowOut(out, L"Some files' links have expired. The rest carry on, and those files are fetched again with fresh links.");
+        return;
+    }
+    wcscpy(g_repHeld[g_repHeldN++], text);
+    if (!wcsncmp(text, L"  -> ", 5) || g_repHeldN == REP_HELD_MAX) repAriaFlush(out);
+}
+
 // Passes on what changed: rows the cursor has left are finished, and the cursor's row is sent again whenever
 // it changes. The carriage return in front tells the output panel to redraw that line.
 static void repRelayScreen(HANDLE con, HANDLE out, SHORT* sent, wchar_t* shown) {
@@ -208,6 +245,7 @@ static void repRelayScreen(HANDLE con, HANDLE out, SHORT* sent, wchar_t* shown) 
     }
     while (*sent < info.dwCursorPosition.Y) {
         repReadRow(con, *sent, text);
+        if (g_repAria) { repAriaRow(out, text); shown[0] = 0; (*sent)++; continue; }
         wchar_t* msg = repBarMessage(text);
         repWrite(out, L"\r");
         if (msg) {
@@ -223,6 +261,7 @@ static void repRelayScreen(HANDLE con, HANDLE out, SHORT* sent, wchar_t* shown) 
         (*sent)++;
     }
     repReadRow(con, *sent, text);
+    if (g_repAria && (g_repHeldN || !text[0] || !repAriaProgress(text))) return;    // an error still being printed
     if (wcscmp(text, shown)) {
         repWrite(out, L"\r");
         repWrite(out, text);
@@ -267,6 +306,7 @@ static DWORD repRunOnConsole(HANDLE out, const wchar_t* exe, wchar_t* cmd, const
     }
     if (job) { AssignProcessToJobObject(job, pi.hProcess); ResumeThread(pi.hThread); }
 
+    g_repHeldN = 0; g_repRefused = 0;
     SHORT sent = 0; wchar_t shown[REP_CON_WIDTH + 1] = L"";
     HANDLE w[2] = { pi.hProcess, cancel };
     BOOL cancelled = FALSE;
@@ -282,6 +322,12 @@ static DWORD repRunOnConsole(HANDLE out, const wchar_t* exe, wchar_t* cmd, const
         repRelayScreen(conOut, out, &sent, shown);
     }
     repRelayScreen(conOut, out, &sent, shown);   // whatever it printed just before it ended
+    if (g_repAria) {
+        wchar_t last[REP_CON_WIDTH + 1];
+        repReadRow(conOut, sent, last);           // a last row with no line end after it
+        if (g_repHeldN || !repAriaProgress(last)) repAriaRow(out, last);
+        repAriaFlush(out);
+    }
     if (job) CloseHandle(job);
     CloseHandle(conIn); CloseHandle(conOut);
     FreeConsole();
@@ -803,6 +849,13 @@ static void drawRepair(int cL, int cR) {
     repDrawOutput(cL, cR, cardB + dp(12), L"Output", st, FALSE);
 }
 
+// How many rows a line takes; the drawing below walks the same breaks
+static int repLineRows(const RepLine* l, int perRow) {
+    int rows = 0, off = 0;
+    while (off < l->len) { wrapRow(l->s, l->len, off, perRow, &off); rows++; }
+    return rows ? rows : 1;
+}
+
 // The output window, shared with the Download Windows page: a title, what's happening now, and the text.
 static void repDrawOutput(int cL, int cR, int oTop, const wchar_t* title, const wchar_t* runningText, BOOL markErrors) {
     Col sf = surfaceCol();
@@ -847,7 +900,7 @@ static void repDrawOutput(int cL, int cR, int oTop, const wchar_t* title, const 
 
     EnterCriticalSection(&g_lock);
     int total = 0;
-    for (int i = 0; i < g_repN; i++) total += g_repLines[i].len ? (g_repLines[i].len + perRow - 1) / perRow : 1;
+    for (int i = 0; i < g_repN; i++) total += repLineRows(&g_repLines[i], perRow);
     int maxTop = total > visible ? total - visible : 0;
     if (g_repFollow || g_repTop >= maxTop) { g_repTop = maxTop; g_repFollow = TRUE; }
     if (g_repTop < 0) g_repTop = 0;
@@ -860,15 +913,17 @@ static void repDrawOutput(int cL, int cR, int oTop, const wchar_t* title, const 
         int row = 0;
         for (int i = 0; i < g_repN && row < g_repTop + visible; i++) {
             RepLine* l = &g_repLines[i];
-            int rows = l->len ? (l->len + perRow - 1) / perRow : 1;
+            int rows = repLineRows(l, perRow), off = 0;
             if (row + rows <= g_repTop) { row += rows; continue; }
             BOOL cmdLine = (l->len > 1 && l->s[0] == L'>' && l->s[1] == L' ');
             COLORREF lineCol = cmdLine ? g_accent : (markErrors && repLooksLikeError(l)) ? RGB(232, 72, 85) : textRGB();
             for (int r = 0; r < rows; r++, row++) {
-                if (row < g_repTop || row >= g_repTop + visible || !l->len) continue;
-                wchar_t t[1001]; int off = r * perRow, n = l->len - off;
-                if (n > perRow) n = perRow;
-                wmemcpy(t, l->s + off, n); t[n] = 0;
+                if (!l->len) continue;
+                int next, n = wrapRow(l->s, l->len, off, perRow, &next), from = off;
+                off = next;
+                if (row < g_repTop || row >= g_repTop + visible) continue;
+                wchar_t t[1001];
+                wmemcpy(t, l->s + from, n); t[n] = 0;
                 int yy = textT + (row - g_repTop) * rowH;
                 RECT rr = { textL, yy, textR, yy + rowH };
                 drawText(g_fMono, t, rr, lineCol, DT_LEFT | DT_VCENTER | DT_SINGLELINE);

@@ -1,4 +1,4 @@
-# Windows Chosen Utilities v1.5
+# Windows Chosen Utilities v1.6
 
 [![Download](https://img.shields.io/badge/Download-exe-0078D4?style=for-the-badge)](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 [![Latest release](https://img.shields.io/github/v/release/misal1337/windows-chosen-utilities?style=for-the-badge&label=version)](https://github.com/misal1337/windows-chosen-utilities/releases)
@@ -129,3 +129,8 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
 - Install Apps page added, with update buttons and default file types for PotPlayer and NanaZip.
 - MS Office 365 page added: download, install and channel switching.
 - Windows 11 style dialogs replace message boxes, with one prompt per action. The Progress log scrolls.
+
+**25 Nov 2026: v1.6**
+- Output boxes no longer cut words in half at the end of a row.
+- Download Windows: small files download first, so fewer links expire on slow connections, and expired links
+  show one plain line instead of rows of 403 errors.

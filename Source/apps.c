@@ -1289,14 +1289,9 @@ static void appsDrawLog(int cL, int cR, int oTop, const wchar_t* now) {
         if (n == 0 && nRows < APPS_LOG_MAX * 8) { rows[nRows].line = (short)i; rows[nRows].start = 0; rows[nRows].len = 0; nRows++; }
         while (p < n && nRows < APPS_LOG_MAX * 8) {
             int room = p ? cols - 2 : cols;                // continuation rows are indented by two
-            int len = n - p;
-            if (len > room) {
-                len = room;
-                for (int k = room; k > room / 2; k--) if (s[p + k] == L' ') { len = k; break; }
-            }
+            int next, len = wrapRow(s, n, p, room, &next);
             rows[nRows].line = (short)i; rows[nRows].start = (short)p; rows[nRows].len = (short)len; nRows++;
-            p += len;
-            while (p < n && s[p] == L' ') p++;
+            p = next;
         }
     }
     int maxTop = nRows > visible ? nRows - visible : 0;
