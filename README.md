@@ -139,6 +139,6 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
   and the app couldn't be clicked.
 
 **25 Nov 2026: v1.8**
-- Download Windows and ESD to ISO: a notification inside the app replaces the "Windows ISO is ready" box, so a
-  finished job never blocks the window. If the app isn't in front, its taskbar button flashes.
+- Download Windows and ESD to ISO: the page's own status line replaces the "Windows ISO is ready" box, so a
+  finished job never blocks the window. A green dot marks the page, and the taskbar button flashes.
 - README: code signing section corrected. Releases are unsigned.

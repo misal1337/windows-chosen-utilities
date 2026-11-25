@@ -2076,10 +2076,10 @@ static BOOL dlSaveLog(const wchar_t* isoPath) {
     return ok;
 }
 
-// The job can run for an hour with the app in the background, so a notification in the app says it's done
+// The job can run for an hour with the app in the background, so it's announced without a dialog (note.c)
 static void dlOnJobSucceeded(void) {
     size_t pre = wcslen(DL_SAVED_PREFIX);
-    wchar_t msg[MAX_PATH * 2 + 128] = L"", isoPath[MAX_PATH * 2 + 2] = L"";
+    wchar_t isoPath[MAX_PATH * 2 + 2] = L"";
     EnterCriticalSection(&g_lock);
     for (int i = g_repN - 1; i >= 0 && !isoPath[0]; i--) {
         if (!g_repLines[i].s || wcsncmp(g_repLines[i].s, DL_SAVED_PREFIX, pre)) continue;
@@ -2089,9 +2089,9 @@ static void dlOnJobSucceeded(void) {
     if (!isoPath[0]) return;
     BOOL logged = dlSaveLog(isoPath);
     const wchar_t* slash = wcsrchr(isoPath, L'\\');
-    swprintf(msg, MAX_PATH * 2 + 128, L"%s\nIt's saved on your Desktop%s", slash ? slash + 1 : isoPath,
-             logged ? L", with the conversion log beside it as a .txt file of the same name." : L".");
-    noteShow(L"Windows ISO is ready", msg);
+    swprintf(g_dlReady, MAX_PATH * 2 + 64, L"Ready on your Desktop: %s", slash ? slash + 1 : isoPath);
+    wcscpy(g_repStatus, logged ? L"Finished. Log saved beside the ISO." : L"Finished successfully.");
+    noteShow(PAGE_DOWNLOAD);
 }
 
 // Clears what a build cut short can leave: a mounted image, loaded hives, unfinished downloads
@@ -2160,9 +2160,10 @@ static void drawDownload(int cL, int cR) {
     drawText(g_fH1, L"Download Windows", t1, textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     RECT t2 = { cL + dp(84), top + dp(46), cR - dp(16), top + dp(68) };
     BOOL jobOn = g_repRunning && g_repJob == REP_UUP;
-    drawText(jobOn ? g_fBodyBold : g_fBody,
-             jobOn ? L"UUP Converter is running. Do not turn off your PC" : L"Builds a bootable Windows ISO on your Desktop, using UUP dump",
-             t2, jobOn ? RGB(232, 72, 85) : mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    BOOL ready = !jobOn && g_dlReady[0];
+    drawText(jobOn || ready ? g_fBodyBold : g_fBody,
+             jobOn ? L"UUP Converter is running. Do not turn off your PC" : ready ? g_dlReady : L"Builds a bootable Windows ISO on your Desktop, using UUP dump",
+             t2, jobOn ? RGB(232, 72, 85) : ready ? noteGreen() : mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     // the heading, and the architecture: x64 or arm64, one always chosen. The buttons match Find's size and line up
     // with its right edge.
