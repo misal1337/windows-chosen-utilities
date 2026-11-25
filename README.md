@@ -5,7 +5,7 @@ follows your dark/light theme and accent colour, and uses Windows 11 style dialo
 administrator rights asks once through UAC.
 
 ## Download
-Get `Windows Chosen Utilities.exe` from the [latest release](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
+Get `Windows.Chosen.Utilities.exe` from the [latest release](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 and run it. Nothing is installed.
 
 ## Pages
