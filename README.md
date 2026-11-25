@@ -69,7 +69,10 @@ and run it. Nothing is installed.
   and run `.\build.ps1`.
 
 ## Licence
-MIT; see [LICENSE](LICENSE). Two small parts come from other MIT projects, credited there and in the source.
+MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projects and keep their own notices:
+- `Source/assoc.c` (UserChoice hash) follows [PS-SFTA](https://github.com/DanysysTeam/PS-SFTA) by DanysysTeam.
+- `Source/uclhash_tables.inc` comes from [cssxn/UserChoiceLatestHash](https://github.com/cssxn/UserChoiceLatestHash);
+  its full notice is at the top of that file.
 
 ## Changelog
 **6 Nov 2026: first build**
