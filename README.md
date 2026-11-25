@@ -1,12 +1,43 @@
 # Windows Chosen Utilities v1.5
 
+[![Download](https://img.shields.io/badge/Download-exe-0078D4?style=for-the-badge)](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/misal1337/windows-chosen-utilities?style=for-the-badge&label=version)](https://github.com/misal1337/windows-chosen-utilities/releases)
+[![Licence: MIT](https://img.shields.io/github/license/misal1337/windows-chosen-utilities?style=for-the-badge&label=licence)](LICENSE)
+[![Windows 11](https://img.shields.io/badge/Windows-11-0078D4?style=for-the-badge)](#pages)
+
 A small, native Windows 11 app: one portable exe with no installer and no dependencies. It has a Mica window,
 follows your dark/light theme and accent colour, and uses Windows 11 style dialogs. Anything that needs
 administrator rights asks once through UAC.
 
+![Disk Clean-up](docs/screenshots/cleanup.png)
+
 ## Download
 Get `Windows.Chosen.Utilities.exe` from the [latest release](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 and run it. Nothing is installed.
+
+## Screenshots
+<table>
+  <tr>
+    <td><img src="docs/screenshots/repair.png" alt="Windows Repair"><br><b>Windows Repair</b></td>
+    <td><img src="docs/screenshots/manual-updates.png" alt="Manual Updates"><br><b>Manual Updates</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/misc-tweaks.png" alt="Misc Tweaks"><br><b>Misc Tweaks</b></td>
+    <td><img src="docs/screenshots/reg-networks.png" alt="Reg Networks"><br><b>Reg Networks</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/run-as-ti.png" alt="Run as TI"><br><b>Run as TI</b></td>
+    <td><img src="docs/screenshots/download-windows.png" alt="Download Windows"><br><b>Download Windows</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/windows-aio.png" alt="Windows AIO"><br><b>Windows AIO</b></td>
+    <td><img src="docs/screenshots/install-apps.png" alt="Install Apps"><br><b>Install Apps</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/office.png" alt="MS Office 365"><br><b>MS Office 365</b></td>
+    <td><img src="docs/screenshots/remove-apps.png" alt="Remove Apps"><br><b>Remove Apps</b></td>
+  </tr>
+</table>
 
 ## Pages
 - **Disk Clean-up**: clears temp files, the Recycle Bin, the Windows Update cache, the thumbnail cache, crash
@@ -26,7 +57,9 @@ and run it. Nothing is installed.
   Tailscale, with signature checks and tidy Start menu shortcuts.
 - **MS Office 365**: downloads Microsoft 365 Apps (x64) from the Office CDN, installs the apps you pick, and
   switches between the Current, Beta and Dev Main channels.
-- **Boot to UEFI BIOS** (bottom of the rail): restarts straight into the firmware settings.
+- **Remove Apps**: removes the apps that come with Windows for your account, or brings them back.
+- **Boot to USB** and **Boot to UEFI BIOS** (bottom of the rail): restart straight into a bootable USB stick, or into
+  the firmware settings.
 
 ## Notes
 - The exe is not code-signed yet, so SmartScreen may warn you on first launch: *More info → Run anyway*.
