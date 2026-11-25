@@ -130,7 +130,12 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
 - MS Office 365 page added: download, install and channel switching.
 - Windows 11 style dialogs replace message boxes, with one prompt per action. The Progress log scrolls.
 
+**25 Nov 2026: v1.5**
+- First public release, open source under the MIT licence.
+
 **25 Nov 2026: v1.6**
 - Output boxes no longer cut words in half at the end of a row.
 - Download Windows: small files download first, so fewer links expire on slow connections, and expired links
   show one plain line instead of rows of 403 errors.
+- If a download fails, the error says how many links Microsoft refused in the last round.
+- Release builds are made by GitHub Actions, and the exe's file properties show its version.
