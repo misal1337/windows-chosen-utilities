@@ -200,7 +200,7 @@ static wchar_t* repBarMessage(wchar_t* row) {
 // line in its place, and every other error is passed on whole. Progress rows overwrite each other.
 #define REP_HELD_MAX 16
 static BOOL g_repAria = FALSE;
-static int  g_repRefused = 0, g_repHeldN = 0;
+static int  g_repRefused = 0, g_repDropped = 0, g_repHeldN = 0;
 static wchar_t g_repHeld[REP_HELD_MAX][REP_CON_WIDTH + 1];
 
 static BOOL repAriaProgress(const wchar_t* t) {
@@ -226,6 +226,20 @@ static void repAriaRow(HANDLE out, const wchar_t* text) {
         g_repHeldN = 0;
         if (!g_repRefused++)
             repRowOut(out, L"Some files' links have expired. The rest carry on, and those files are fetched again with fresh links.");
+        return;
+    }
+    // A dropped connection reports every open transfer at once, dozens of rows saying the same thing. The cause is
+    // kept once, in case the download never recovers.
+    const wchar_t* why = wcsstr(text, L"Network problem has occurred. cause:");
+    if (!wcsncmp(text, L"Exception: ", 11) && why) {
+        g_repHeldN = 0;
+        if (!g_repDropped++) {
+            wchar_t line[REP_CON_WIDTH + 200];
+            swprintf(line, REP_CON_WIDTH + 200, L"The connection dropped (%s). Files that don't finish are fetched again.", why + 36);
+            wchar_t* end = wcsstr(line, L".). ");            // the cause's own full stop
+            if (end) wmemmove(end, end + 1, wcslen(end));
+            repRowOut(out, line);
+        }
         return;
     }
     wcscpy(g_repHeld[g_repHeldN++], text);
@@ -306,7 +320,7 @@ static DWORD repRunOnConsole(HANDLE out, const wchar_t* exe, wchar_t* cmd, const
     }
     if (job) { AssignProcessToJobObject(job, pi.hProcess); ResumeThread(pi.hThread); }
 
-    g_repHeldN = 0; g_repRefused = 0;
+    g_repHeldN = 0; g_repRefused = 0; g_repDropped = 0;
     SHORT sent = 0; wchar_t shown[REP_CON_WIDTH + 1] = L"";
     HANDLE w[2] = { pi.hProcess, cancel };
     BOOL cancelled = FALSE;

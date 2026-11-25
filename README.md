@@ -1,4 +1,4 @@
-# Windows Chosen Utilities v1.8
+# Windows Chosen Utilities v1.9
 
 [![Download](https://img.shields.io/badge/Download-exe-0078D4?style=for-the-badge)](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 [![Latest release](https://img.shields.io/github/v/release/misal1337/windows-chosen-utilities?style=for-the-badge&label=version)](https://github.com/misal1337/windows-chosen-utilities/releases)
@@ -142,3 +142,10 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
 - Download Windows and ESD to ISO: the page's own status line replaces the "Windows ISO is ready" box, so a
   finished job never blocks the window. A green dot marks the page, and the taskbar button flashes.
 - README: code signing section corrected. Releases are unsigned.
+
+**25 Nov 2026: v1.9**
+- Languages: English, German, French, Spanish, Portuguese (Brazil) and Simplified Chinese, from the globe button next
+  to the theme button. Follows Windows until you choose one; any other Windows language shows English.
+- The translations haven't been checked by native speakers, and some messages are still in English. Corrections are
+  welcome: they're all in [lang.txt](Source/lang.txt).
+- Download Windows: a dropped connection shows one line in the output instead of dozens.

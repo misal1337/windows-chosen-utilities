@@ -4,3 +4,4 @@
 *.obj
 *.o
 *.ilk
+Source/lang_data.inc

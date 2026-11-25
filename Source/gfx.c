@@ -144,6 +144,7 @@ static BOOL textInit(void) {
     return TRUE;
 }
 
+#include "lang.c"
 static IDWriteTextLayout* textLayout(WFont font, const wchar_t* s, int len, float w, float h) {
     IDWriteTextLayout* l = NULL;
     if (!g_dw || !font) return NULL;
@@ -156,6 +157,7 @@ static RECT g_textClip;                 // while on, text is cut off at this rec
 static BOOL g_textClipOn = FALSE;
 static void drawText(WFont font, const wchar_t* s, RECT rc, COLORREF col, UINT fmt) {
     if (!s || !*s || !g_scratchDC) return;
+    if (font != g_fMono) s = tr(s);
     if (!textCreateTarget()) return;
     RECT b = rc;
     if (b.left < 0) b.left = 0; if (b.top < 0) b.top = 0;
@@ -226,7 +228,7 @@ static int textWidthN(WFont font, const wchar_t* s, int n) {
     comRelease(l);
     return (int)ceil(m.widthIncludingTrailingWhitespace);
 }
-static int textWidth(WFont font, const wchar_t* s) { return textWidthN(font, s, (int)wcslen(s)); }
+static int textWidth(WFont font, const wchar_t* s) { if (font != g_fMono) s = tr(s); return textWidthN(font, s, (int)wcslen(s)); }
 
 // Where a row of monospaced text ends, so words aren't cut: returns how many characters from off the row shows, and
 // sets *next to where the following row starts. Breaks at a space, between the [..][..] parts of a progress line, or

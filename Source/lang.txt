@@ -1,0 +1,333 @@
+en|de|fr|es|pt-BR|zh-CN
+Disk Clean-up|Bereinigung|Nettoyage|Limpieza de disco|Limpeza de disco|磁盘清理
+Windows Repair|Windows-Reparatur|Réparer Windows|Reparar Windows|Reparar o Windows|Windows 修复
+Manual Updates|Manuelle Updates|Mises à jour|Actualizaciones|Atualizações|手动更新
+Misc Tweaks|Optimierungen|Réglages divers|Ajustes varios|Ajustes diversos|其他调整
+Reg Networks|Netzwerkprofile|Profils réseau|Perfiles de red|Perfis de rede|网络配置文件
+Run as TI|Als TI ausführen|Exécuter (TI)|Ejecutar como TI|Executar como TI|以 TI 身份运行
+Download Windows|Windows laden|Obtenir Windows|Descargar Windows|Baixar Windows|下载 Windows
+Install Apps|Apps installieren|Installer apps|Instalar apps|Instalar apps|安装应用
+Remove Apps|Apps entfernen|Retirer apps|Quitar apps|Remover apps|卸载应用
+Boot to USB|Von USB starten|Démarrer sur USB|Iniciar desde USB|Iniciar pelo USB|从 USB 启动
+Boot to UEFI BIOS|UEFI-BIOS öffnen|Ouvrir l'UEFI|Abrir UEFI BIOS|Abrir UEFI BIOS|进入 UEFI BIOS
+Language|Sprache|Langue|Idioma|Idioma|语言
+Choose the app's language. Logs and output boxes stay in English.|Wählen Sie die Sprache der App. Protokolle und Ausgabefelder bleiben auf Englisch.|Choisissez la langue de l'application. Les journaux et les zones de sortie restent en anglais.|Elige el idioma de la aplicación. Los registros y los cuadros de salida siguen en inglés.|Escolha o idioma do aplicativo. Os logs e as caixas de saída continuam em inglês.|选择应用的语言。日志和输出框仍为英文。
+Follow Windows|Wie Windows|Comme Windows|Igual que Windows|Seguir o Windows|跟随 Windows
+Cancel|Abbrechen|Annuler|Cancelar|Cancelar|取消
+Choose|Auswählen|Choisir|Elegir|Escolher|选择
+Browse|Durchsuchen|Parcourir|Examinar|Procurar|浏览
+Copy|Kopieren|Copier|Copiar|Copiar|复制
+Open|Öffnen|Ouvrir|Abrir|Abrir|打开
+Start|Starten|Démarrer|Iniciar|Iniciar|开始
+Stop|Anhalten|Arrêter|Detener|Parar|停止
+Refresh|Aktualisieren|Actualiser|Actualizar|Atualizar|刷新
+Delete|Löschen|Supprimer|Eliminar|Excluir|删除
+Reset|Zurücksetzen|Réinitialiser|Restablecer|Redefinir|重置
+Find|Suchen|Rechercher|Buscar|Localizar|查找
+Save|Speichern|Enregistrer|Guardar|Salvar|保存
+Download|Herunterladen|Télécharger|Descargar|Baixar|下载
+Install|Installieren|Installer|Instalar|Instalar|安装
+Uninstall|Deinstallieren|Désinstaller|Desinstalar|Desinstalar|卸载
+Update|Aktualisieren|Mettre à jour|Actualizar|Atualizar|更新
+Remove|Entfernen|Supprimer|Quitar|Remover|移除
+Run|Ausführen|Exécuter|Ejecutar|Executar|运行
+Restore|Wiederherstellen|Restaurer|Restaurar|Restaurar|还原
+Continue|Weiter|Continuer|Continuar|Continuar|继续
+Apply|Übernehmen|Appliquer|Aplicar|Aplicar|应用
+Restart|Neu starten|Redémarrer|Reiniciar|Reiniciar|重启
+Restart now|Jetzt neu starten|Redémarrer|Reiniciar ahora|Reiniciar agora|立即重启
+Later|Später|Plus tard|Más tarde|Mais tarde|稍后
+Not now|Nicht jetzt|Pas maintenant|Ahora no|Agora não|暂不
+Abort|Abbrechen|Abandonner|Anular|Anular|中止
+Clear|Leeren|Effacer|Borrar|Limpar|清除
+Discard|Verwerfen|Ignorer|Descartar|Descartar|放弃
+Turn off|Ausschalten|Désactiver|Desactivar|Desativar|关闭
+Turn on|Einschalten|Activer|Activar|Ativar|打开
+Select all|Alle|Tout|Todo|Tudo|全选
+Select none|Keine|Aucun|Ninguno|Nenhum|全不选
+{1} of {2}|{1} von {2}|{1} sur {2}|{1} de {2}|{1} de {2}|{1}/{2}
+Cancelled.|Abgebrochen.|Annulé.|Cancelado.|Cancelado.|已取消。
+Cancelling…|Wird abgebrochen…|Annulation…|Cancelando…|Cancelando…|正在取消…
+Working…|In Arbeit…|En cours…|Trabajando…|Trabalhando…|正在处理…
+Running…|Wird ausgeführt…|En cours…|En ejecución…|Em execução…|正在运行…
+Starting…|Wird gestartet…|Démarrage…|Iniciando…|Iniciando…|正在启动…
+Drive C:  •  {1} free of {2}|Laufwerk C:  •  {1} von {2} frei|Lecteur C:  •  {1} libres sur {2}|Unidad C:  •  {1} libres de {2}|Unidade C:  •  {1} livres de {2}|驱动器 C:  •  可用 {1}，共 {2}
+selected to remove|zum Löschen ausgewählt|à supprimer|para eliminar|para remover|选定清理
+View files|Anzeigen|Afficher|Ver archivos|Ver arquivos|查看文件
+View points|Anzeigen|Afficher|Ver puntos|Ver pontos|查看还原点
+Not present|Nicht vorhanden|Absent|No hay|Não há|不存在
+Show size|Größe anzeigen|Voir la taille|Ver tamaño|Ver tamanho|显示大小
+None|Keine|Aucun|Ninguno|Nenhum|无
+No older points|Keine älteren|Aucun ancien|Sin anteriores|Sem anteriores|没有旧还原点
+Up to {1}|Bis zu {1}|Jusqu'à {1}|Hasta {1}|Até {1}|最多 {1}
+Scanning…|Wird gesucht…|Analyse…|Analizando…|Verificando…|正在扫描…
+Cleaning…|Wird bereinigt…|Nettoyage…|Limpiando…|Limpando…|正在清理…
+Checking size…|Größe wird geprüft…|Calcul de la taille…|Comprobando tamaño…|Verificando tamanho…|正在检查大小…
+Cleaned|Bereinigt|Nettoyé|Limpiado|Limpo|已清理
+Rescan|Neu suchen|Réanalyser|Volver a analizar|Verificar de novo|重新扫描
+Clean up|Bereinigen|Nettoyer|Limpiar|Limpar|清理
+Temporary files|Temporäre Dateien|Fichiers temporaires|Archivos temporales|Arquivos temporários|临时文件
+Leftover files in your user temp folder|Reste im Temp-Ordner Ihres Benutzers|Restes du dossier temporaire utilisateur|Restos de la carpeta temporal del usuario|Sobras na pasta temporária do usuário|用户临时文件夹中的残留文件
+Windows temporary files|Temporäre Windows-Dateien|Fichiers temporaires Windows|Archivos temporales de Windows|Arquivos temporários do Windows|Windows 临时文件
+System-wide temp folder (C:\Windows\Temp)|Temp-Ordner des Systems (C:\Windows\Temp)|Dossier temporaire du système (C:\Windows\Temp)|Carpeta temporal del sistema (C:\Windows\Temp)|Pasta temporária do sistema (C:\Windows\Temp)|系统临时文件夹 (C:\Windows\Temp)
+Recycle Bin|Papierkorb|Corbeille|Papelera de reciclaje|Lixeira|回收站
+Files you have deleted, on all drives|Gelöschte Dateien auf allen Laufwerken|Fichiers supprimés, sur tous les lecteurs|Archivos eliminados, en todas las unidades|Arquivos excluídos, em todas as unidades|所有驱动器上已删除的文件
+Windows Update cache|Windows Update-Cache|Cache Windows Update|Caché de Windows Update|Cache do Windows Update|Windows 更新缓存
+Downloaded update files (safely re-downloaded)|Heruntergeladene Updates (erneut ladbar)|Mises à jour téléchargées (récupérables)|Actualizaciones descargadas (recuperables)|Atualizações baixadas (recuperáveis)|已下载的更新文件（可重新下载）
+Thumbnail cache|Miniaturansichten-Cache|Cache des miniatures|Caché de miniaturas|Cache de miniaturas|缩略图缓存
+Explorer thumbnail and icon caches|Miniatur- und Symbol-Caches des Explorers|Caches de miniatures et d'icônes|Cachés de miniaturas e iconos|Caches de miniaturas e ícones|资源管理器缩略图和图标缓存
+Crash dumps|Absturzabbilder|Vidages sur incident|Volcados de memoria|Despejos de falha|崩溃转储
+Application crash dump files|Absturzabbilder von Apps|Vidages d'applications|Volcados de aplicaciones|Despejos de falha de apps|应用崩溃转储文件
+Windows error reports|Windows-Fehlerberichte|Rapports d'erreurs Windows|Informes de errores de Windows|Relatórios de erros do Windows|Windows 错误报告
+Queued problem-report data|Wartende Problemberichte|Rapports en attente|Informes en cola|Relatórios na fila|排队的问题报告数据
+Old restore points|Alte Wiederherstellungspunkte|Anciens points de restauration|Puntos de restauración antiguos|Pontos de restauração antigos|旧还原点
+All System Restore points except the newest|Alle außer dem neuesten|Tous sauf le plus récent|Todos excepto el más reciente|Todos, exceto o mais recente|除最新外的所有还原点
+All restore points|Alle Wiederherstellungspunkte|Tous les points de restauration|Todos los puntos de restauración|Todos os pontos de restauração|所有还原点
+Every System Restore point, including the newest|Alle, auch der neueste|Tous, y compris le plus récent|Todos, incluido el más reciente|Todos, inclusive o mais recente|所有还原点，包括最新的
+Turn off System Restore|Systemwiederherstellung aus|Désactiver la restauration|Desactivar Restaurar sistema|Desativar Restauração|关闭系统还原
+No new restore points. Windows may delete existing ones.|Keine neuen Punkte. Windows löscht evtl. alte.|Plus de nouveaux points. Les anciens peuvent être effacés.|Sin puntos nuevos. Se pueden borrar los actuales.|Sem novos pontos. Os atuais podem ser excluídos.|不再创建还原点。Windows 可能删除现有还原点。
+Ready — {1} found in {2} locations|Bereit — {1} an {2} Orten gefunden|Prêt — {1} dans {2} emplacements|Listo — {1} en {2} ubicaciones|Pronto — {1} em {2} locais|就绪 — 在 {2} 个位置找到 {1}
+Ready — {1} found in {2} location|Bereit — {1} an {2} Ort gefunden|Prêt — {1} dans {2} emplacement|Listo — {1} en {2} ubicación|Pronto — {1} em {2} local|就绪 — 在 {2} 个位置找到 {1}
+Clean-up complete. Ready — {1} found in {2} locations|Fertig. Bereit — {1} an {2} Orten gefunden|Nettoyage terminé. Prêt — {1} dans {2} emplacements|Limpieza terminada. Listo — {1} en {2} ubicaciones|Limpeza concluída. Pronto — {1} em {2} locais|清理完成。就绪 — 在 {2} 个位置找到 {1}
+Total|Gesamt|Total|Total|Total|总计
+Total, without restore points|Gesamt, ohne Wiederherstellungspunkte|Total, hors points de restauration|Total, sin puntos de restauración|Total, sem pontos de restauração|总计（不含还原点）
+Size unknown|Größe unbekannt|Taille inconnue|Tamaño desconocido|Tamanho desconhecido|大小未知
+Delete selected items?|Ausgewählte Elemente löschen?|Supprimer les éléments sélectionnés ?|¿Eliminar los elementos seleccionados?|Excluir os itens selecionados?|删除所选项目？
+These items will be permanently deleted. This can't be undone.|Diese Elemente werden endgültig gelöscht. Das kann nicht rückgängig gemacht werden.|Ces éléments seront supprimés définitivement. Cette action est irréversible.|Estos elementos se eliminarán permanentemente. No se puede deshacer.|Estes itens serão excluídos permanentemente. Isso não pode ser desfeito.|这些项目将被永久删除，且无法撤消。
+Cancelled — nothing was deleted|Abgebrochen — nichts wurde gelöscht|Annulé — rien n'a été supprimé|Cancelado — no se eliminó nada|Cancelado — nada foi excluído|已取消 — 未删除任何内容
+Turn off System Restore?|Systemwiederherstellung ausschalten?|Désactiver la restauration du système ?|¿Desactivar Restaurar sistema?|Desativar a Restauração do Sistema?|关闭系统还原？
+Windows will stop creating restore points, and may delete the ones you have.|Windows erstellt keine Wiederherstellungspunkte mehr und löscht möglicherweise die vorhandenen.|Windows ne créera plus de points de restauration et pourra supprimer ceux qui existent.|Windows dejará de crear puntos de restauración y puede eliminar los que tienes.|O Windows deixará de criar pontos de restauração e pode excluir os existentes.|Windows 将停止创建还原点，并可能删除现有还原点。
+Turn on System Restore?|Systemwiederherstellung einschalten?|Activer la restauration du système ?|¿Activar Restaurar sistema?|Ativar a Restauração do Sistema?|打开系统还原？
+Windows will create restore points again.|Windows erstellt wieder Wiederherstellungspunkte.|Windows créera de nouveau des points de restauration.|Windows volverá a crear puntos de restauración.|O Windows voltará a criar pontos de restauração.|Windows 将重新创建还原点。
+Restart Explorer?|Explorer neu starten?|Redémarrer l'Explorateur ?|¿Reiniciar el Explorador?|Reiniciar o Explorer?|重启资源管理器？
+Restart Explorer|Explorer neu starten|Redémarrer|Reiniciar Explorador|Reiniciar Explorer|重启资源管理器
+Network profiles|Netzwerkprofile|Profils réseau|Perfiles de red|Perfis de rede|网络配置文件
+Saved Wi‑Fi and Ethernet networks, in the Windows registry.|Gespeicherte WLAN- und Ethernet-Netzwerke in der Windows-Registrierung.|Réseaux Wi‑Fi et Ethernet enregistrés dans le registre Windows.|Redes Wi‑Fi y Ethernet guardadas en el Registro de Windows.|Redes Wi‑Fi e Ethernet salvas no Registro do Windows.|Windows 注册表中保存的 Wi‑Fi 和以太网网络。
+Open in Registry Editor|Im Editor öffnen|Ouvrir dans l'Éditeur|Abrir en el Editor|Abrir no Editor|在注册表编辑器中打开
+Remove “Network N” profiles|„Network N“ entfernen|Supprimer « Network N »|Quitar “Network N”|Remover “Network N”|移除“Network N”配置文件
+Open  —  view the key in Registry Editor (asks for administrator).|Öffnen  —  zeigt den Schlüssel im Registrierungs-Editor (fragt nach Administratorrechten).|Ouvrir  —  affiche la clé dans l'Éditeur du Registre (demande l'administrateur).|Abrir  —  muestra la clave en el Editor del Registro (pide administrador).|Abrir  —  mostra a chave no Editor do Registro (pede administrador).|打开  —  在注册表编辑器中查看该项（需要管理员权限）。
+Remove  —  deletes unidentified “Network 1”…“Network 100” profiles. Keeps “Network”, Tailscale, VPNs and named networks. Needs administrator.|Entfernen  —  löscht unbekannte Profile „Network 1“…„Network 100“. „Network“, Tailscale, VPNs und benannte Netzwerke bleiben. Benötigt Administratorrechte.|Supprimer  —  efface les profils non identifiés « Network 1 »…« Network 100 ». Conserve « Network », Tailscale, les VPN et les réseaux nommés. Requiert l'administrateur.|Quitar  —  elimina los perfiles no identificados “Network 1”…“Network 100”. Conserva “Network”, Tailscale, las VPN y las redes con nombre. Requiere administrador.|Remover  —  exclui os perfis não identificados “Network 1”…“Network 100”. Mantém “Network”, Tailscale, VPNs e redes com nome. Requer administrador.|移除  —  删除未识别的“Network 1”…“Network 100”配置文件。保留“Network”、Tailscale、VPN 和已命名的网络。需要管理员权限。
+Go to a registry key|Zu einem Registrierungsschlüssel|Accéder à une clé de registre|Ir a una clave del Registro|Ir para uma chave do Registro|转到注册表项
+Paste any key and it opens in Registry Editor. Computer\ and short names like HKCU and HKLM are understood. To type one instead, press Enter.|Fügen Sie einen Schlüssel ein, er öffnet sich im Registrierungs-Editor. Computer\ und Kurznamen wie HKCU und HKLM funktionieren. Nach dem Eintippen Enter drücken.|Collez une clé : elle s'ouvre dans l'Éditeur du Registre. Computer\ et les noms courts comme HKCU et HKLM sont acceptés. Si vous la tapez, appuyez sur Entrée.|Pega una clave y se abre en el Editor del Registro. Se aceptan Computer\ y nombres cortos como HKCU y HKLM. Si la escribes, pulsa Entrar.|Cole uma chave e ela abre no Editor do Registro. Computer\ e nomes curtos como HKCU e HKLM são aceitos. Se digitar, pressione Enter.|粘贴任意项，即可在注册表编辑器中打开。支持 Computer\ 以及 HKCU、HKLM 等简称。如需手动输入，请按 Enter。
+Opened in Registry Editor.|Im Registrierungs-Editor geöffnet.|Ouvert dans l'Éditeur du Registre.|Abierto en el Editor del Registro.|Aberto no Editor do Registro.|已在注册表编辑器中打开。
+Remove network profiles?|Netzwerkprofile entfernen?|Supprimer les profils réseau ?|¿Quitar los perfiles de red?|Remover os perfis de rede?|移除网络配置文件？
+Nothing to remove|Nichts zu entfernen|Rien à supprimer|Nada que quitar|Nada para remover|没有可移除的内容
+No generic “Network N” profiles were found.|Keine allgemeinen „Network N“-Profile gefunden.|Aucun profil « Network N » trouvé.|No se encontraron perfiles “Network N”.|Nenhum perfil “Network N” encontrado.|未找到通用的“Network N”配置文件。
+Removed {1} network profile(s).|{1} Netzwerkprofil(e) entfernt.|{1} profil(s) réseau supprimé(s).|Perfiles de red quitados: {1}.|Perfis de rede removidos: {1}.|已移除 {1} 个网络配置文件。
+Run as TrustedInstaller|Als TrustedInstaller ausführen|Exécuter en tant que TrustedInstaller|Ejecutar como TrustedInstaller|Executar como TrustedInstaller|以 TrustedInstaller 身份运行
+Run as TrustedInstaller?|Als TrustedInstaller ausführen?|Exécuter en tant que TrustedInstaller ?|¿Ejecutar como TrustedInstaller?|Executar como TrustedInstaller?|以 TrustedInstaller 身份运行？
+Run a program or import a registry file with TrustedInstaller rights.|Programm oder Registrierungsdatei mit TrustedInstaller-Rechten ausführen.|Exécuter un programme ou importer un fichier .reg avec les droits TrustedInstaller.|Ejecuta un programa o importa un archivo .reg con permisos de TrustedInstaller.|Execute um programa ou importe um arquivo .reg com direitos de TrustedInstaller.|以 TrustedInstaller 权限运行程序或导入注册表文件。
+Choose an .exe to run, or a .reg to import. It runs as TrustedInstaller, which can change files and registry keys that even administrators can't. Asks for administrator permission.|Wählen Sie eine .exe zum Ausführen oder eine .reg zum Importieren. TrustedInstaller darf auch ändern, was Administratoren nicht dürfen. Fragt nach Administratorrechten.|Choisissez un .exe à exécuter ou un .reg à importer. Il s'exécute en tant que TrustedInstaller, qui peut modifier des fichiers et clés inaccessibles même aux administrateurs. Demande l'autorisation d'administrateur.|Elige un .exe para ejecutar o un .reg para importar. Se ejecuta como TrustedInstaller, que puede cambiar archivos y claves que ni los administradores pueden. Pide permiso de administrador.|Escolha um .exe para executar ou um .reg para importar. Ele roda como TrustedInstaller, que pode alterar arquivos e chaves que nem administradores podem. Pede permissão de administrador.|选择要运行的 .exe 或要导入的 .reg。它以 TrustedInstaller 身份运行，可更改连管理员也无法更改的文件和注册表项。需要管理员权限。
+Path to an .exe or .reg file|Pfad zu einer .exe- oder .reg-Datei|Chemin d'un fichier .exe ou .reg|Ruta de un archivo .exe o .reg|Caminho de um arquivo .exe ou .reg|.exe 或 .reg 文件的路径
+Choose a file first|Zuerst eine Datei wählen|Choisissez d'abord un fichier|Elige primero un archivo|Escolha um arquivo primeiro|请先选择文件
+File not found|Datei nicht gefunden|Fichier introuvable|Archivo no encontrado|Arquivo não encontrado|找不到文件
+Cancelled — nothing ran.|Abgebrochen — nichts wurde ausgeführt.|Annulé — rien n'a été exécuté.|Cancelado — no se ejecutó nada.|Cancelado — nada foi executado.|已取消 — 未运行任何内容。
+Windows updates|Windows-Updates|Mises à jour Windows|Actualizaciones de Windows|Atualizações do Windows|Windows 更新
+Get this PC's next update, or install one you've downloaded, using DISM.|Nächstes Update für diesen PC holen oder ein geladenes per DISM installieren.|Obtenir la prochaine mise à jour de ce PC, ou en installer une avec DISM.|Obtén la próxima actualización de este PC o instala una descargada con DISM.|Obtenha a próxima atualização deste PC ou instale uma já baixada com o DISM.|获取此电脑的下一个更新，或使用 DISM 安装已下载的更新。
+Download latest update (.msu)|Neuestes Update laden (.msu)|Télécharger la dernière (.msu)|Descargar la última (.msu)|Baixar a mais recente (.msu)|下载最新更新 (.msu)
+Download latest update (ndp481)|Neuestes Update laden (ndp481)|Télécharger la dernière (ndp481)|Descargar la última (ndp481)|Baixar a mais recente (ndp481)|下载最新更新 (ndp481)
+Install update file (.msu or .cab)|Update-Datei installieren|Installer un fichier (.msu, .cab)|Instalar archivo (.msu o .cab)|Instalar arquivo (.msu ou .cab)|安装更新文件 (.msu 或 .cab)
+Cancel download|Download abbrechen|Annuler|Cancelar descarga|Cancelar download|取消下载
+Looking for the latest update…|Neuestes Update wird gesucht…|Recherche de la dernière mise à jour…|Buscando la última actualización…|Procurando a atualização mais recente…|正在查找最新更新…
+Checking the file…|Datei wird geprüft…|Vérification du fichier…|Comprobando el archivo…|Verificando o arquivo…|正在检查文件…
+This PC: build {1}, {2}. Gets the newest {3} update.|Dieser PC: Build {1}, {2}. Holt das neueste {3}-Update.|Ce PC : build {1}, {2}. Obtient la dernière mise à jour {3}.|Este PC: compilación {1}, {2}. Obtiene la última actualización {3}.|Este PC: build {1}, {2}. Obtém a atualização {3} mais recente.|此电脑：内部版本 {1}，{2}。获取最新的 {3} 更新。
+Installing can take several minutes and can't be cancelled once it starts. Some updates need a restart to finish.|Die Installation kann mehrere Minuten dauern und lässt sich nicht abbrechen. Manche Updates benötigen einen Neustart.|L'installation peut prendre plusieurs minutes et ne peut pas être annulée. Certaines mises à jour exigent un redémarrage.|La instalación puede tardar varios minutos y no se puede cancelar. Algunas actualizaciones requieren reiniciar.|A instalação pode levar vários minutos e não pode ser cancelada. Algumas atualizações exigem reinicialização.|安装可能需要几分钟，开始后无法取消。某些更新需要重启才能完成。
+Installing {1} — {2}%|{1} wird installiert — {2} %|Installation de {1} — {2} %|Instalando {1} — {2} %|Instalando {1} — {2}%|正在安装 {1} — {2}%
+Installing {1}…|{1} wird installiert…|Installation de {1}…|Instalando {1}…|Instalando {1}…|正在安装 {1}…
+Installed {1}. Restart to finish.|{1} installiert. Zum Abschließen neu starten.|{1} installé. Redémarrez pour terminer.|{1} instalado. Reinicia para terminar.|{1} instalado. Reinicie para concluir.|已安装 {1}。重启以完成。
+Installed {1}.|{1} installiert.|{1} installé.|{1} instalado.|{1} instalado.|已安装 {1}。
+Install this update?|Dieses Update installieren?|Installer cette mise à jour ?|¿Instalar esta actualización?|Instalar esta atualização?|安装此更新？
+Download this update?|Dieses Update herunterladen?|Télécharger cette mise à jour ?|¿Descargar esta actualización?|Baixar esta atualização?|下载此更新？
+Update saved|Update gespeichert|Mise à jour enregistrée|Actualización guardada|Atualização salva|更新已保存
+Update not downloaded|Update nicht heruntergeladen|Mise à jour non téléchargée|Actualización no descargada|Atualização não baixada|更新未下载
+Update not installed|Update nicht installiert|Mise à jour non installée|Actualización no instalada|Atualização não instalada|更新未安装
+Restart to finish installing?|Zum Abschließen neu starten?|Redémarrer pour terminer ?|¿Reiniciar para terminar?|Reiniciar para concluir?|重启以完成安装？
+The update is installed, and Windows needs to restart to finish. Save your work first.|Das Update ist installiert, Windows muss zum Abschließen neu starten. Speichern Sie zuerst Ihre Arbeit.|La mise à jour est installée et Windows doit redémarrer pour terminer. Enregistrez d'abord votre travail.|La actualización está instalada y Windows debe reiniciarse para terminar. Guarda antes tu trabajo.|A atualização foi instalada e o Windows precisa reiniciar para concluir. Salve seu trabalho antes.|更新已安装，Windows 需要重启才能完成。请先保存您的工作。
+This PC is Windows build {1} {2}|Dieser PC: Windows-Build {1} {2}|Ce PC : build Windows {1} {2}|Este PC: compilación de Windows {1} {2}|Este PC: build do Windows {1} {2}|此电脑为 Windows 内部版本 {1} {2}
+Reserved Storage|Reservierter Speicher|Stockage réservé|Almacen. reservado|Armaz. reservado|保留的存储
+Windows Update Cleanup|Update-Bereinigung|Nettoyage des m. à j.|Limpieza de updates|Limpeza de updates|Windows 更新清理
+Scan Health|Zustand prüfen|Analyser l'état|Examinar estado|Verificar integridade|扫描健康状况
+Restore Health|Zustand reparieren|Réparer l'état|Reparar estado|Restaurar integridade|恢复健康状况
+Restore using WIM|Mit WIM reparieren|Réparer avec un WIM|Reparar con WIM|Restaurar com WIM|使用 WIM 恢复
+Frees up 7–10 GB when turned off. Green is on, red is off.|Aus: gibt 7–10 GB frei. Grün = ein, rot = aus.|Désactivé : libère 7–10 Go. Vert : actif, rouge : inactif.|Al desactivarlo libera 7–10 GB. Verde: sí, rojo: no.|Desativado, libera 7–10 GB. Verde: ativo, vermelho: inativo.|关闭后可释放 7–10 GB。绿色为开，红色为关。
+If you have run Windows Update Cleanup, restart the PC before SFC Scannow so it finishes faster.|Nach der Update-Bereinigung den PC vor SFC Scannow neu starten, dann geht es schneller.|Après le nettoyage des mises à jour, redémarrez avant SFC Scannow pour aller plus vite.|Tras la limpieza de updates, reinicia antes de SFC Scannow para que termine antes.|Após a limpeza de updates, reinicie antes do SFC Scannow para terminar mais rápido.|如果已运行 Windows 更新清理，请先重启再运行 SFC Scannow，以便更快完成。
+Checks Windows for damage. Only reads, changes nothing.|Prüft Windows auf Schäden. Ändert nichts.|Recherche des dommages, sans rien modifier.|Busca daños en Windows. No cambia nada.|Procura danos no Windows. Não altera nada.|检查 Windows 是否损坏。仅读取，不更改。
+Repairs damage, downloading good files from Windows Update.|Repariert mit Dateien von Windows Update.|Répare avec des fichiers de Windows Update.|Repara con archivos de Windows Update.|Repara com arquivos do Windows Update.|从 Windows 更新下载文件修复损坏。
+Repairs damage offline, from a WIM of this PC's exact build.|Repariert offline mit einem WIM desselben Builds.|Répare hors ligne avec un WIM du même build.|Repara sin conexión con un WIM de la misma compilación.|Repara offline com um WIM da mesma build.|使用相同内部版本的 WIM 离线修复。
+Output|Ausgabe|Sortie|Salida|Saída|输出
+Hide output|Ausblenden|Masquer|Ocultar|Ocultar|隐藏输出
+Show output|Einblenden|Afficher|Mostrar|Mostrar|显示输出
+What each command prints shows here as it runs.|Hier erscheint die Ausgabe jedes Befehls.|La sortie de chaque commande s'affiche ici.|Aquí se muestra la salida de cada comando.|A saída de cada comando aparece aqui.|命令运行时的输出显示在此处。
+Running command {1} of {2}…|Befehl {1} von {2} läuft…|Commande {1} sur {2}…|Ejecutando comando {1} de {2}…|Executando comando {1} de {2}…|正在运行命令 {1}/{2}…
+Finished: all {1} commands succeeded.|Fertig: alle {1} Befehle erfolgreich.|Terminé : les {1} commandes ont réussi.|Terminado: los {1} comandos se completaron.|Concluído: os {1} comandos deram certo.|完成：全部 {1} 个命令均成功。
+Finished successfully.|Erfolgreich abgeschlossen.|Terminé.|Terminado correctamente.|Concluído com êxito.|已成功完成。
+Failed. See the output for the reason.|Fehlgeschlagen. Grund siehe Ausgabe.|Échec. Voir la sortie.|Error. Consulta la salida.|Falhou. Veja a saída.|失败。原因请查看输出。
+Run Windows Update Cleanup?|Update-Bereinigung ausführen?|Lancer le nettoyage des mises à jour ?|¿Ejecutar la limpieza de Windows Update?|Executar a limpeza do Windows Update?|运行 Windows 更新清理？
+This analyzes the component store, then removes old versions of updated Windows components. It can take a long time and can't be cancelled once it starts.|Analysiert den Komponentenspeicher und entfernt alte Versionen aktualisierter Komponenten. Das kann lange dauern und lässt sich nicht abbrechen.|Analyse le magasin de composants, puis supprime les anciennes versions. Cela peut être long et ne peut pas être annulé.|Analiza el almacén de componentes y elimina las versiones antiguas. Puede tardar mucho y no se puede cancelar.|Analisa o repositório de componentes e remove versões antigas. Pode demorar e não pode ser cancelado.|分析组件存储，然后删除已更新组件的旧版本。可能需要很长时间，开始后无法取消。
+Run SFC Scannow?|SFC Scannow ausführen?|Lancer SFC Scannow ?|¿Ejecutar SFC Scannow?|Executar o SFC Scannow?|运行 SFC Scannow？
+This checks Windows' system files and repairs any that are damaged. It can take a long time and can't be cancelled once it starts. Right after Windows Update Cleanup, restart the PC first so it finishes faster.|Prüft die Windows-Systemdateien und repariert beschädigte. Das kann lange dauern und lässt sich nicht abbrechen. Direkt nach der Update-Bereinigung zuerst den PC neu starten.|Vérifie les fichiers système et répare ceux qui sont endommagés. Cela peut être long et ne peut pas être annulé. Juste après le nettoyage des mises à jour, redémarrez d'abord le PC.|Comprueba los archivos del sistema y repara los dañados. Puede tardar mucho y no se puede cancelar. Justo después de la limpieza de Windows Update, reinicia antes el PC.|Verifica os arquivos do sistema e repara os danificados. Pode demorar e não pode ser cancelado. Logo após a limpeza do Windows Update, reinicie o PC antes.|检查 Windows 系统文件并修复损坏的文件。可能需要很长时间，开始后无法取消。若刚运行过 Windows 更新清理，请先重启电脑。
+Run Restore Health?|Zustand reparieren?|Réparer l'état de Windows ?|¿Reparar el estado de Windows?|Restaurar a integridade?|运行恢复健康状况？
+DISM may download repair files from Windows Update. This can take a long time and can't be cancelled once it starts.|DISM lädt eventuell Reparaturdateien von Windows Update. Das kann lange dauern und lässt sich nicht abbrechen.|DISM peut télécharger des fichiers depuis Windows Update. Cela peut être long et ne peut pas être annulé.|DISM puede descargar archivos de Windows Update. Puede tardar mucho y no se puede cancelar.|O DISM pode baixar arquivos do Windows Update. Pode demorar e não pode ser cancelado.|DISM 可能从 Windows 更新下载修复文件。可能需要很长时间，开始后无法取消。
+Turn reserved storage off?|Reservierten Speicher ausschalten?|Désactiver le stockage réservé ?|¿Desactivar el almacenamiento reservado?|Desativar o armazenamento reservado?|关闭保留的存储？
+Turn reserved storage on?|Reservierten Speicher einschalten?|Activer le stockage réservé ?|¿Activar el almacenamiento reservado?|Ativar o armazenamento reservado?|打开保留的存储？
+Small one-click changes.|Kleine Änderungen mit einem Klick.|Petits changements en un clic.|Pequeños cambios con un clic.|Pequenas mudanças com um clique.|一键式小改动。
+Terminal Settings Restore|Terminal-Einstellungen|Paramètres Terminal|Restaurar Terminal|Restaurar Terminal|还原终端设置
+Replaces Windows Terminal's settings.json with the copy built into this app. It acts straight away, and the current file isn't kept.|Ersetzt die settings.json von Windows Terminal durch die Kopie in dieser App. Geschieht sofort, die aktuelle Datei wird nicht aufbewahrt.|Remplace le settings.json de Windows Terminal par la copie intégrée. Effet immédiat, le fichier actuel n'est pas conservé.|Sustituye el settings.json de Windows Terminal por la copia incluida. Es inmediato y no se conserva el archivo actual.|Substitui o settings.json do Windows Terminal pela cópia incluída. É imediato e o arquivo atual não é mantido.|用此应用内置的副本替换 Windows 终端的 settings.json。立即生效，且不保留当前文件。
+Enable / Disable|Ein / Aus|Activer / Désactiver|Activar / Desactivar|Ativar / Desativar|启用 / 禁用
+Explore Background|Hintergrund erkunden|Explorer l'arrière-plan|Explorar fondo|Explorar fundo|探索背景
+Gallery|Katalog|Galerie|Galería|Galeria|图库
+RDP Blank Password|RDP ohne Kennwort|RDP sans mot de passe|RDP sin contraseña|RDP sem senha|RDP 空密码
+Map Network Drives Delay|Netzlaufwerke verzögern|Lecteurs réseau différés|Retrasar unidades de red|Adiar unidades de rede|延迟映射网络驱动器
+WU Driver Update|Treiber über WU|Pilotes via WU|Controladores por WU|Drivers pelo WU|WU 驱动程序更新
+Windows Theme|Windows-Design|Thème Windows|Tema de Windows|Tema do Windows|Windows 主题
+Timezone and Region|Zeitzone und Region|Fuseau et région|Zona horaria y región|Fuso e região|时区和区域
+Annoying Notifications|Lästige Hinweise|Notifications gênantes|Avisos molestos|Avisos incômodos|烦人的通知
+Enabled|Ein|Activé|Activado|Ativado|已启用
+Disabled|Aus|Désactivé|Desactivado|Desativado|已禁用
+Enabled: Running|Ein: aktiv|Activé : en cours|Activado: en ejecución|Ativado: em execução|已启用：正在运行
+Enabled: Running, with Memory Integrity|Ein: aktiv, mit Speicherintegrität|Activé : avec intégrité de la mémoire|Activado: con integridad de memoria|Ativado: com integridade da memória|已启用：正在运行，含内存完整性
+Enabled: Restart to Finish|Ein: Neustart erforderlich|Activé : redémarrage requis|Activado: reinicia para terminar|Ativado: reinicie para concluir|已启用：重启以完成
+Disabled: Restart to Finish|Aus: Neustart erforderlich|Désactivé : redémarrage requis|Desactivado: reinicia para terminar|Desativado: reinicie para concluir|已禁用：重启以完成
+Enabled: In the Desktop Context Menu|Ein: im Desktop-Kontextmenü|Activé : dans le menu du Bureau|Activado: en el menú del escritorio|Ativado: no menu da área de trabalho|已启用：在桌面右键菜单中
+Disabled: Not in the Desktop Context Menu|Aus: nicht im Desktop-Kontextmenü|Désactivé : absent du menu du Bureau|Desactivado: no está en el menú del escritorio|Desativado: fora do menu da área de trabalho|已禁用：不在桌面右键菜单中
+Enabled: In File Explorer|Ein: im Datei-Explorer|Activé : dans l'Explorateur|Activado: en el Explorador|Ativado: no Explorador|已启用：在文件资源管理器中
+Disabled: Not in File Explorer|Aus: nicht im Datei-Explorer|Désactivé : absent de l'Explorateur|Desactivado: no está en el Explorador|Desativado: fora do Explorador|已禁用：不在文件资源管理器中
+Enabled: Blank Passwords Allowed Remotely|Ein: leere Kennwörter per Remote erlaubt|Activé : mots de passe vides autorisés à distance|Activado: contraseñas vacías permitidas en remoto|Ativado: senhas em branco permitidas remotamente|已启用：允许远程使用空密码
+Disabled: Windows Default|Aus: Windows-Standard|Désactivé : valeur par défaut|Desactivado: valor predeterminado|Desativado: padrão do Windows|已禁用：Windows 默认值
+Enabled: Drives Connect when First Opened|Ein: Verbindung beim ersten Öffnen|Activé : connexion à la première ouverture|Activado: se conectan al abrirlas|Ativado: conectam ao abrir|已启用：首次打开时连接
+Disabled: Drives Reconnect at Sign-in|Aus: Verbindung bei der Anmeldung|Désactivé : reconnexion à l'ouverture de session|Desactivado: se conectan al iniciar sesión|Desativado: reconectam ao entrar|已禁用：登录时重新连接
+Disabled: No Drivers from Windows Update|Aus: keine Treiber von Windows Update|Désactivé : aucun pilote de Windows Update|Desactivado: sin controladores de Windows Update|Desativado: sem drivers do Windows Update|已禁用：不从 Windows 更新获取驱动程序
+Enabled: Windows Update Can Offer Drivers|Ein: Windows Update bietet Treiber an|Activé : Windows Update propose des pilotes|Activado: Windows Update ofrece controladores|Ativado: o Windows Update oferece drivers|已启用：Windows 更新可提供驱动程序
+Enabled: Other Driver Policies Are Set|Ein: andere Treiberrichtlinien gesetzt|Activé : d'autres stratégies sont définies|Activado: hay otras directivas|Ativado: há outras políticas|已启用：已设置其他驱动程序策略
+Dark. Click for white.|Dunkel. Klicken für Hell.|Sombre. Cliquez pour clair.|Oscuro. Clic para claro.|Escuro. Clique para claro.|深色。点击切换为浅色。
+White. Click for dark.|Hell. Klicken für Dunkel.|Clair. Cliquez pour sombre.|Claro. Clic para oscuro.|Claro. Clique para escuro.|浅色。点击切换为深色。
+Enabled: All Three Are On|Ein: alle drei sind an|Activé : les trois sont actives|Activado: los tres están activos|Ativado: os três estão ativos|已启用：三项均已打开
+Disabled: All Three Are Off|Aus: alle drei sind aus|Désactivé : les trois sont inactives|Desactivado: los tres están inactivos|Desativado: os três estão inativos|已禁用：三项均已关闭
+In Settings > System > Notifications > Additional settings: welcome experience after updates, setup suggestions, and Windows tips.|Unter Einstellungen > System > Benachrichtigungen > Zusätzliche Einstellungen: Willkommensseite nach Updates, Einrichtungsvorschläge und Windows-Tipps.|Dans Paramètres > Système > Notifications > Paramètres supplémentaires : accueil après mise à jour, suggestions de configuration et conseils Windows.|En Configuración > Sistema > Notificaciones > Configuración adicional: bienvenida tras actualizar, sugerencias de configuración y consejos de Windows.|Em Configurações > Sistema > Notificações > Configurações adicionais: boas-vindas após atualizações, sugestões de configuração e dicas do Windows.|位于 设置 > 系统 > 通知 > 其他设置：更新后的欢迎体验、设置建议和 Windows 提示。
+Restart to finish?|Zum Abschließen neu starten?|Redémarrer pour terminer ?|¿Reiniciar para terminar?|Reiniciar para concluir?|重启以完成？
+This change takes effect when Windows restarts. Save your work first.|Die Änderung wird nach einem Neustart wirksam. Speichern Sie zuerst Ihre Arbeit.|Ce changement prend effet au redémarrage. Enregistrez d'abord votre travail.|El cambio se aplica al reiniciar Windows. Guarda antes tu trabajo.|A mudança vale após reiniciar o Windows. Salve seu trabalho antes.|此更改将在 Windows 重启后生效。请先保存您的工作。
+Builds a bootable Windows ISO on your Desktop, using UUP dump|Erstellt mit UUP dump eine startbare Windows-ISO auf dem Desktop|Crée une ISO Windows amorçable sur le Bureau avec UUP dump|Crea una ISO de Windows arrancable en el escritorio con UUP dump|Cria uma ISO inicializável do Windows na área de trabalho com o UUP dump|使用 UUP dump 在桌面上创建可启动的 Windows ISO
+UUP Converter is running. Do not turn off your PC|UUP-Konverter läuft. Schalten Sie den PC nicht aus|Conversion UUP en cours. N'éteignez pas votre PC|El conversor UUP está en marcha. No apagues el PC|O conversor UUP está em execução. Não desligue o PC|UUP 转换器正在运行。请勿关闭电脑
+Ready on your Desktop: {1}|Auf dem Desktop bereit: {1}|Prête sur le Bureau : {1}|Lista en el escritorio: {1}|Pronta no desktop: {1}|已在桌面上就绪：{1}
+Finished. Log saved beside the ISO.|Fertig. Protokoll neben der ISO.|Terminé. Journal à côté de l'ISO.|Terminado. Registro junto a la ISO.|Concluído. Log ao lado da ISO.|已完成。日志保存在 ISO 旁。
+Known Build Number|Bekannte Buildnummer|Numéro de build connu|Número de compilación conocido|Número de build conhecido|已知内部版本号
+Build number|Buildnummer|Numéro de build|Número de compilación|Número de build|内部版本号
+Build number, for example {1} (latest Release Preview)|Buildnummer, z. B. {1} (neueste Release Preview)|Numéro de build, p. ex. {1} (dernière Release Preview)|Número de compilación, p. ej. {1} (última Release Preview)|Número de build, por ex. {1} (Release Preview mais recente)|内部版本号，例如 {1}（最新 Release Preview）
+Build number, for example {1}|Buildnummer, z. B. {1}|Numéro de build, p. ex. {1}|Número de compilación, p. ej. {1}|Número de build, por ex. {1}|内部版本号，例如 {1}
+Looking for build {1} for {2}…|Build {1} für {2} wird gesucht…|Recherche du build {1} pour {2}…|Buscando la compilación {1} para {2}…|Procurando a build {1} para {2}…|正在查找适用于 {2} 的内部版本 {1}…
+Find a build to see its editions.|Suchen Sie einen Build, um seine Editionen zu sehen.|Recherchez un build pour voir ses éditions.|Busca una compilación para ver sus ediciones.|Localize uma build para ver as edições.|查找内部版本以查看其版本类型。
+Reading this build's editions and languages…|Editionen und Sprachen werden gelesen…|Lecture des éditions et des langues…|Leyendo ediciones e idiomas…|Lendo edições e idiomas…|正在读取此内部版本的版本类型和语言…
+The language of the Windows image. Other languages can still be added to Windows later.|Die Sprache des Windows-Abbilds. Weitere Sprachen lassen sich später hinzufügen.|La langue de l'image Windows. D'autres langues peuvent être ajoutées plus tard.|El idioma de la imagen de Windows. Después se pueden añadir otros.|O idioma da imagem do Windows. Outros podem ser adicionados depois.|Windows 映像的语言。以后仍可向 Windows 添加其他语言。
+Apps|Apps|Applications|Aplicaciones|Aplicativos|应用
+All apps|Alle Apps|Toutes les applications|Todas las aplicaciones|Todos os aplicativos|所有应用
+All {1} apps|Alle {1} Apps|Les {1} applications|Las {1} aplicaciones|Todos os {1} aplicativos|全部 {1} 个应用
+{1} of {2} apps|{1} von {2} Apps|{1} applications sur {2}|{1} de {2} aplicaciones|{1} de {2} aplicativos|{1}/{2} 个应用
+Reading apps…|Apps werden gelesen…|Lecture des applications…|Leyendo aplicaciones…|Lendo aplicativos…|正在读取应用…
+Only the essential apps|Nur die nötigsten Apps|Applications essentielles|Solo las esenciales|Só os essenciais|仅必要应用
+Choose apps|Apps auswählen|Choisir les applications|Elegir aplicaciones|Escolher aplicativos|选择应用
+Unticked apps are left out of the ISO and can be installed from the Microsoft Store later. The Store, Store Purchase App, Windows Security, Feedback Hub and the Xbox apps are always installed.|Abgewählte Apps fehlen in der ISO und lassen sich später aus dem Microsoft Store installieren. Store, Store Purchase App, Windows-Sicherheit, Feedback-Hub und die Xbox-Apps sind immer dabei.|Les applications décochées sont exclues de l'ISO et peuvent être installées plus tard depuis le Microsoft Store. Le Store, Store Purchase App, Sécurité Windows, le Hub de commentaires et les applications Xbox sont toujours installés.|Las aplicaciones sin marcar no se incluyen en la ISO y se pueden instalar después desde Microsoft Store. Store, Store Purchase App, Seguridad de Windows, el Centro de opiniones y las de Xbox se instalan siempre.|Os aplicativos desmarcados ficam fora da ISO e podem ser instalados depois pela Microsoft Store. A Store, o Store Purchase App, a Segurança do Windows, o Hub de Comentários e os aplicativos Xbox são sempre instalados.|未勾选的应用不会包含在 ISO 中，以后可从 Microsoft Store 安装。Store、Store Purchase App、Windows 安全中心、反馈中心和 Xbox 应用始终安装。
+Clean up leftovers|Reste bereinigen|Nettoyer les restes|Limpiar restos|Limpar sobras|清理残留
+Clean up leftovers?|Reste bereinigen?|Nettoyer les restes ?|¿Limpiar los restos?|Limpar as sobras?|清理残留？
+Download and build ISO|ISO laden und erstellen|Télécharger et créer l'ISO|Descargar y crear ISO|Baixar e criar ISO|下载并创建 ISO
+Download and build this ISO?|Diese ISO laden und erstellen?|Télécharger et créer cette ISO ?|¿Descargar y crear esta ISO?|Baixar e criar esta ISO?|下载并创建此 ISO？
+Download and conversion|Download und Umwandlung|Téléchargement et conversion|Descarga y conversión|Download e conversão|下载和转换
+Getting ready…|Vorbereitung…|Préparation…|Preparando…|Preparando…|正在准备…
+Step 1 of 3: getting UUP dump's tools…|Schritt 1 von 3: Tools laden…|Étape 1/3 : outils…|Paso 1 de 3: herramientas…|Etapa 1 de 3: ferramentas…|第 1 步（共 3 步）：获取 UUP dump 工具…
+Step 2 of 3: downloading…|Schritt 2 von 3: Download…|Étape 2/3 : téléchargement…|Paso 2 de 3: descargando…|Etapa 2 de 3: baixando…|第 2 步（共 3 步）：正在下载…
+Step 3 of 3: converting to an ISO…|Schritt 3 von 3: Umwandlung in ISO…|Étape 3/3 : conversion en ISO…|Paso 3 de 3: convirtiendo a ISO…|Etapa 3 de 3: convertendo em ISO…|第 3 步（共 3 步）：正在转换为 ISO…
+Which one?|Welcher?|Lequel ?|¿Cuál?|Qual?|选择哪一个？
+WIM Editor|WIM-Editor|Éditeur WIM|Editor WIM|Editor WIM|WIM 编辑器
+ESD to ISO|ESD zu ISO|ESD vers ISO|ESD a ISO|ESD para ISO|ESD 转 ISO
+Hash|Hash|Hachage|Hash|Hash|哈希
+Select WIMs|WIMs wählen|Choisir des WIM|Elegir WIM|Escolher WIMs|选择 WIM
+Move up|Nach oben|Monter|Subir|Mover acima|上移
+Move down|Nach unten|Descendre|Bajar|Mover abaixo|下移
+Name|Name|Nom|Nombre|Nome|名称
+Description|Beschreibung|Description|Descripción|Descrição|说明
+Edition ID|Editions-ID|ID d'édition|ID de edición|ID da edição|版本 ID
+Build|Build|Build|Build|Build|内部版本
+Select WIMs to list their images. Each WIM you add appears under its own line.|Wählen Sie WIMs, um deren Abbilder anzuzeigen. Jedes WIM erscheint unter einer eigenen Zeile.|Choisissez des WIM pour lister leurs images. Chaque WIM apparaît sous sa propre ligne.|Elige archivos WIM para ver sus imágenes. Cada WIM aparece bajo su propia línea.|Escolha WIMs para listar as imagens. Cada WIM aparece sob sua própria linha.|选择 WIM 以列出其映像。每个 WIM 单独成组显示。
+Select an image to rename it|Abbild zum Umbenennen wählen|Choisissez une image à renommer|Elige una imagen para renombrarla|Escolha uma imagem para renomear|选择映像以重命名
+Save as WIM|Als WIM|En WIM|Como WIM|Como WIM|另存为 WIM
+Save as ESD|Als ESD|En ESD|Como ESD|Como ESD|另存为 ESD
+Save as folder|Als Ordner|En dossier|Como carpeta|Como pasta|另存为文件夹
+Save as ISO|Als ISO|En ISO|Como ISO|Como ISO|另存为 ISO
+Type a path or choose Browse|Pfad eingeben oder durchsuchen|Saisissez un chemin ou parcourez|Escribe una ruta o pulsa Examinar|Digite um caminho ou clique em Procurar|输入路径或点击浏览
+Source folder|Quellordner|Dossier source|Carpeta de origen|Pasta de origem|源文件夹
+ISO to save|Ziel-ISO|ISO à créer|ISO de destino|ISO de destino|要保存的 ISO
+ISO label|ISO-Name|Étiquette ISO|Etiqueta ISO|Rótulo da ISO|ISO 卷标
+Source ISO|Quell-ISO|ISO source|ISO de origen|ISO de origem|源 ISO
+Extract to|Entpacken nach|Extraire vers|Extraer en|Extrair para|解压到
+Extract|Entpacken|Extraire|Extraer|Extrair|解压
+Setup folder|Setup-Ordner|Dossier d'installation|Carpeta de instalación|Pasta de instalação|安装文件夹
+USB drives|USB-Laufwerke|Lecteurs USB|Unidades USB|Unidades USB|USB 驱动器
+Compatible devices not found. Plug in a USB drive and choose Refresh.|Keine passenden Geräte gefunden. USB-Laufwerk anschließen und aktualisieren.|Aucun appareil compatible. Branchez un lecteur USB et actualisez.|No hay dispositivos compatibles. Conecta una unidad USB y pulsa Actualizar.|Nenhum dispositivo compatível. Conecte uma unidade USB e clique em Atualizar.|未找到兼容设备。请插入 USB 驱动器并点击刷新。
+Everything on the chosen USB drive is erased. The drive starts on both BIOS and UEFI PCs, and only 32 GB of it is used. Only USB drives that don't hold Windows are listed.|Alles auf dem gewählten USB-Laufwerk wird gelöscht. Es startet auf BIOS- und UEFI-PCs; nur 32 GB werden genutzt. Laufwerke mit Windows werden nicht aufgeführt.|Tout le contenu du lecteur USB choisi est effacé. Il démarre sur les PC BIOS et UEFI ; seuls 32 Go sont utilisés. Les lecteurs contenant Windows ne sont pas listés.|Se borra todo el contenido de la unidad USB elegida. Arranca en PC con BIOS y UEFI; solo se usan 32 GB. No se muestran las unidades con Windows.|Tudo na unidade USB escolhida é apagado. Ela inicia em PCs BIOS e UEFI; só 32 GB são usados. Unidades com Windows não são listadas.|所选 USB 驱动器上的所有内容都会被清除。可在 BIOS 和 UEFI 电脑上启动，仅使用其中 32 GB。只列出不含 Windows 的 USB 驱动器。
+Get hash from file|Hash aus Datei|Calculer le hachage|Obtener hash|Obter hash|计算文件哈希
+File|Datei|Fichier|Archivo|Arquivo|文件
+ESD file|ESD-Datei|Fichier ESD|Archivo ESD|Arquivo ESD|ESD 文件
+Editions to keep|Zu behaltende Editionen|Éditions à conserver|Ediciones que conservar|Edições a manter|要保留的版本
+Choose an ESD file, or type its path and press Enter, to list the Windows editions inside it.|Wählen Sie eine ESD-Datei oder geben Sie den Pfad ein und drücken Sie Enter, um die Editionen anzuzeigen.|Choisissez un fichier ESD, ou saisissez son chemin puis Entrée, pour lister ses éditions Windows.|Elige un archivo ESD, o escribe su ruta y pulsa Entrar, para ver sus ediciones de Windows.|Escolha um arquivo ESD, ou digite o caminho e pressione Enter, para listar as edições do Windows.|选择 ESD 文件，或输入路径并按 Enter，以列出其中的 Windows 版本。
+Save ISO in|ISO speichern in|Enregistrer dans|Guardar ISO en|Salvar ISO em|ISO 保存到
+ISO name|ISO-Name|Nom de l'ISO|Nombre de la ISO|Nome da ISO|ISO 名称
+Our naming|Unser Schema|Notre format|Nuestro formato|Nosso formato|我们的命名
+abbodi1406's naming|Schema von abbodi1406|Format d'abbodi1406|Formato de abbodi1406|Formato do abbodi1406|abbodi1406 的命名
+Channel|Kanal|Canal|Canal|Canal|频道
+Saves as|Dateiname|Nom final|Se guarda como|Salvo como|另存为
+named from the build once the ISO is made|wird nach dem Erstellen anhand des Builds benannt|nommée d'après le build une fois créée|se nombra según la compilación al crearla|nomeada pela build quando criada|创建 ISO 后根据内部版本命名
+Create ISO|ISO erstellen|Créer l'ISO|Crear ISO|Criar ISO|创建 ISO
+ISO is ready: {1} (log saved beside it)|ISO bereit: {1} (Protokoll daneben)|ISO prête : {1} (journal à côté)|ISO lista: {1} (registro al lado)|ISO pronta: {1} (log ao lado)|ISO 已就绪：{1}（日志在旁边）
+ISO is ready: {1}|ISO bereit: {1}|ISO prête : {1}|ISO lista: {1}|ISO pronta: {1}|ISO 已就绪：{1}
+The newest build of each app, installed silently.|Die neueste Version jeder App, ohne Rückfragen installiert.|La dernière version de chaque application, installée en silence.|La última versión de cada aplicación, instalada en silencio.|A versão mais recente de cada aplicativo, instalada em silêncio.|静默安装每个应用的最新版本。
+Installed: {1} · checking for updates…|Installiert: {1} · Updates werden gesucht…|Installé : {1} · recherche de mises à jour…|Instalado: {1} · buscando actualizaciones…|Instalado: {1} · procurando atualizações…|已安装：{1} · 正在检查更新…
+Installed: {1} · the Microsoft Store keeps it updated|Installiert: {1} · Updates über den Microsoft Store|Installé : {1} · mis à jour par le Microsoft Store|Instalado: {1} · lo actualiza Microsoft Store|Instalado: {1} · atualizado pela Microsoft Store|已安装：{1} · 由 Microsoft Store 更新
+Installed: {1} · {2} available|Installiert: {1} · {2} verfügbar|Installé : {1} · {2} disponible|Instalado: {1} · {2} disponible|Instalado: {1} · {2} disponível|已安装：{1} · 可更新至 {2}
+Installed: {1} (latest)|Installiert: {1} (aktuell)|Installé : {1} (à jour)|Instalado: {1} (última)|Instalado: {1} (mais recente)|已安装：{1}（最新）
+Installed: {1}|Installiert: {1}|Installé : {1}|Instalado: {1}|Instalado: {1}|已安装：{1}
+Not installed · from the Microsoft Store|Nicht installiert · aus dem Microsoft Store|Non installé · depuis le Microsoft Store|No instalado · desde Microsoft Store|Não instalado · da Microsoft Store|未安装 · 来自 Microsoft Store
+Not installed|Nicht installiert|Non installé|No instalado|Não instalado|未安装
+Installed|Installiert|Installé|Instalado|Instalado|已安装
+Updating…|Wird aktualisiert…|Mise à jour…|Actualizando…|Atualizando…|正在更新…
+Installing…|Wird installiert…|Installation…|Instalando…|Instalando…|正在安装…
+Progress|Fortschritt|Progression|Progreso|Progresso|进度
+Each step of an install or update shows here.|Hier erscheint jeder Schritt einer Installation.|Chaque étape d'installation s'affiche ici.|Aquí se muestra cada paso de la instalación.|Cada etapa da instalação aparece aqui.|安装或更新的每一步显示在此处。
+Installed silently from the publisher, signature checked, with one shortcut in Programs and none on the desktop. Pot Player gets this app's settings and opens MP4, MKV, MPG, MPEG and WMV. NanaZip comes from the Microsoft Store, which updates it, and opens ZIP and RAR.|Still vom Herausgeber installiert, Signatur geprüft, eine Verknüpfung unter Programme, keine auf dem Desktop. Pot Player erhält die Einstellungen dieser App und öffnet MP4, MKV, MPG, MPEG und WMV. NanaZip kommt aus dem Microsoft Store und öffnet ZIP und RAR.|Installation silencieuse depuis l'éditeur, signature vérifiée, un raccourci dans Programmes et aucun sur le Bureau. Pot Player reçoit les réglages de cette application et ouvre MP4, MKV, MPG, MPEG et WMV. NanaZip vient du Microsoft Store et ouvre ZIP et RAR.|Instalación silenciosa desde el editor, firma comprobada, un acceso directo en Programas y ninguno en el escritorio. Pot Player recibe los ajustes de esta app y abre MP4, MKV, MPG, MPEG y WMV. NanaZip viene de Microsoft Store y abre ZIP y RAR.|Instalação silenciosa do fornecedor, assinatura verificada, um atalho em Programas e nenhum na área de trabalho. O Pot Player recebe as configurações deste app e abre MP4, MKV, MPG, MPEG e WMV. O NanaZip vem da Microsoft Store e abre ZIP e RAR.|从发布者静默安装并检查签名，仅在“程序”中创建一个快捷方式，桌面上不创建。Pot Player 使用此应用的设置并打开 MP4、MKV、MPG、MPEG 和 WMV。NanaZip 来自 Microsoft Store 并由其更新，可打开 ZIP 和 RAR。
+Switch update channel|Updatekanal wechseln|Changer de canal|Cambiar de canal|Trocar de canal|切换更新频道
+Now {1}|Derzeit {1}|Actuel : {1}|Ahora: {1}|Agora: {1}|当前为 {1}
+Latest builds|Neueste Builds|Derniers builds|Últimas compilaciones|Builds mais recentes|最新内部版本
+Download from Microsoft|Von Microsoft herunterladen|Télécharger depuis Microsoft|Descargar de Microsoft|Baixar da Microsoft|从 Microsoft 下载
+Its newest build, x64|Neuester Build, x64|Dernier build, x64|Última compilación, x64|Build mais recente, x64|其最新内部版本，x64
+Download…|Herunterladen…|Télécharger…|Descargar…|Baixar…|下载…
+About 3–4 GB into a folder you choose. Pressing Download again carries on where it stopped.|Etwa 3–4 GB in einen Ordner Ihrer Wahl. Erneutes Herunterladen setzt fort.|Environ 3–4 Go dans le dossier choisi. Relancer reprend le téléchargement.|Unos 3–4 GB en la carpeta que elijas. Al repetir, continúa donde quedó.|Cerca de 3–4 GB na pasta escolhida. Repetir continua de onde parou.|约 3–4 GB，保存到您选择的文件夹。再次点击下载可继续。
+Install from a downloaded source|Aus heruntergeladener Quelle installieren|Installer depuis une source|Instalar desde un origen descargado|Instalar de uma origem baixada|从已下载的源安装
+Source|Quelle|Source|Origen|Origem|源
+The folder you downloaded Office into|Ordner mit dem heruntergeladenen Office|Dossier où Office a été téléchargé|Carpeta donde descargaste Office|Pasta onde o Office foi baixado|下载 Office 的文件夹
+Choose folder…|Ordner wählen…|Choisir le dossier…|Elegir carpeta…|Escolher pasta…|选择文件夹…
+Update channel|Updatekanal|Canal de mise à jour|Canal de actualización|Canal de atualização|更新频道
+Where Office gets its updates from|Woher Office Updates erhält|Origine des mises à jour|De dónde se actualiza Office|De onde o Office se atualiza|Office 获取更新的来源
+Installs {1}. Open Office apps are closed first.|Installiert {1}. Offene Office-Apps werden zuerst geschlossen.|Installe {1}. Les applications Office ouvertes sont fermées.|Instala {1}. Antes se cierran las apps de Office abiertas.|Instala {1}. Os apps do Office abertos são fechados antes.|安装 {1}。打开的 Office 应用会先关闭。
+Microsoft's apps that come with Windows, for your account only.|Mit Windows gelieferte Microsoft-Apps, nur für Ihr Konto.|Applications Microsoft fournies avec Windows, pour votre compte uniquement.|Aplicaciones de Microsoft incluidas en Windows, solo para tu cuenta.|Aplicativos da Microsoft que vêm com o Windows, só para sua conta.|Windows 自带的 Microsoft 应用，仅针对您的帐户。
+Apps that come with Windows|Mit Windows gelieferte Apps|Applications fournies avec Windows|Aplicaciones incluidas en Windows|Aplicativos que vêm com o Windows|Windows 自带的应用
+Version {1}|Version {1}|Version {1}|Versión {1}|Versão {1}|版本 {1}
+Uninstall removes the ticked apps that are installed; Install brings back ticked ones that aren't.|Deinstallieren entfernt markierte installierte Apps; Installieren holt markierte fehlende zurück.|Désinstaller retire les applications cochées ; Installer remet celles qui manquent.|Desinstalar quita las marcadas; Instalar recupera las marcadas que falten.|Desinstalar remove os marcados; Instalar traz de volta os que faltam.|卸载会移除已勾选且已安装的应用；安装会恢复已勾选但未安装的应用。
+Uninstall ({1})|Deinstallieren ({1})|Désinstaller ({1})|Desinstalar ({1})|Desinstalar ({1})|卸载 ({1})
+Install ({1})|Installieren ({1})|Installer ({1})|Instalar ({1})|Instalar ({1})|安装 ({1})
+Removing…|Wird entfernt…|Suppression…|Quitando…|Removendo…|正在移除…
+Checking what's installed…|Installierte Apps werden geprüft…|Vérification des applications…|Comprobando lo instalado…|Verificando o que está instalado…|正在检查已安装的应用…
+Nothing to uninstall|Nichts zu deinstallieren|Rien à désinstaller|Nada que desinstalar|Nada para desinstalar|没有可卸载的内容
+Tick the installed apps you want removed.|Markieren Sie die zu entfernenden Apps.|Cochez les applications à retirer.|Marca las aplicaciones que quieras quitar.|Marque os aplicativos que deseja remover.|请勾选要移除的已安装应用。
+Nothing to install|Nichts zu installieren|Rien à installer|Nada que instalar|Nada para instalar|没有可安装的内容
+video editor|Videoeditor|éditeur vidéo|editor de vídeo|editor de vídeo|视频编辑器
+alarms and timers|Wecker und Timer|alarmes et minuteurs|alarmas y temporizadores|alarmes e timers|闹钟和计时器
+Restart to UEFI settings?|In die UEFI-Einstellungen neu starten?|Redémarrer vers les paramètres UEFI ?|¿Reiniciar en la configuración UEFI?|Reiniciar nas configurações UEFI?|重启到 UEFI 设置？
+Your PC will restart now and open the motherboard's UEFI settings. Save your work first.|Der PC startet jetzt neu und öffnet die UEFI-Einstellungen. Speichern Sie zuerst Ihre Arbeit.|Votre PC va redémarrer et ouvrir les paramètres UEFI. Enregistrez d'abord votre travail.|El PC se reiniciará y abrirá la configuración UEFI. Guarda antes tu trabajo.|O PC vai reiniciar e abrir as configurações UEFI. Salve seu trabalho antes.|电脑将立即重启并打开主板的 UEFI 设置。请先保存您的工作。
+Restart to USB?|Von USB neu starten?|Redémarrer sur USB ?|¿Reiniciar desde USB?|Reiniciar pelo USB?|重启到 USB？
+Restart to which USB drive?|Von welchem USB-Laufwerk starten?|Redémarrer sur quel lecteur USB ?|¿Desde qué unidad USB reiniciar?|Reiniciar por qual unidade USB?|重启到哪个 USB 驱动器？
+Your PC restarts now and starts from the drive you choose, once. After that, Windows starts as usual. Save your work first.|Der PC startet einmalig vom gewählten Laufwerk. Danach startet Windows wie gewohnt. Speichern Sie zuerst Ihre Arbeit.|Le PC redémarre une fois sur le lecteur choisi. Ensuite, Windows démarre normalement. Enregistrez d'abord votre travail.|El PC se reinicia una vez desde la unidad elegida. Después, Windows arranca como siempre. Guarda antes tu trabajo.|O PC reinicia uma vez pela unidade escolhida. Depois, o Windows inicia normalmente. Salve seu trabalho antes.|电脑将立即重启并从所选驱动器启动一次，之后照常启动 Windows。请先保存您的工作。
+No bootable USB drive|Kein startfähiges USB-Laufwerk|Aucun lecteur USB amorçable|No hay unidad USB arrancable|Nenhuma unidade USB inicializável|没有可启动的 USB 驱动器
+Not available while {1} is working. Its progress is on that page.|Nicht verfügbar, solange {1} arbeitet. Fortschritt auf jener Seite.|Indisponible pendant que {1} travaille. Voir cette page.|No disponible mientras {1} trabaja. El progreso está en esa página.|Indisponível enquanto {1} trabalha. O progresso está nessa página.|{1} 正在工作时不可用。进度显示在该页面上。
+Windows is still downloading|Windows wird noch geladen|Téléchargement de Windows en cours|Windows aún se está descargando|O Windows ainda está sendo baixado|Windows 仍在下载
+Press Cancel on the Download Windows page first, or wait for the ISO to finish.|Brechen Sie zuerst auf der Seite „Windows laden“ ab oder warten Sie auf die ISO.|Annulez d'abord sur la page « Obtenir Windows » ou attendez la fin de l'ISO.|Pulsa antes Cancelar en la página Descargar Windows o espera a que termine la ISO.|Clique antes em Cancelar na página Baixar Windows ou aguarde a ISO terminar.|请先在“下载 Windows”页面点击取消，或等待 ISO 完成。
+Still working|Noch in Arbeit|Encore en cours|Aún trabajando|Ainda em andamento|仍在处理
+Still installing|Installation läuft noch|Installation en cours|Aún instalando|Ainda instalando|仍在安装
+Repair still running|Reparatur läuft noch|Réparation en cours|La reparación sigue en curso|Reparo em andamento|修复仍在运行

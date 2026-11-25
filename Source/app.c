@@ -60,7 +60,7 @@ static void drawRail(int L, int R, int top, int bottom) {
     Col sf = surfaceCol();
     fillRoundRect(L, top, R, bottom, dp(8), sf.r, sf.g, sf.b, sf.a);
 
-    RECT bt = { L + dp(16), top + dp(16), R - dp(38), top + dp(16) + dp(24) };
+    RECT bt = { L + dp(16), top + dp(16), R - dp(66), top + dp(16) + dp(24) };
     drawText(g_fBodyBold, L"Chosen Utilities", bt, textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     // small dark/light switch: shows the mode you'd switch to (moon in light mode, sun in dark mode)
@@ -69,6 +69,12 @@ static void drawRail(int L, int R, int top, int bottom) {
     double tv = anim(ANIM_BTN + BTN_THEME, g_hotBtn == BTN_THEME);
     fillHover(tb.left, tb.top, tb.right, tb.bottom, dp(4), 2 * tv);
     drawGlyph(g_fIcon, g_dark ? 0xE706 : 0xE708, (tb.left + tb.right) / 2, (tb.top + tb.bottom) / 2, textRGB());
+
+    // the language button: the theme switch's size and shape, to its left
+    RECT lb = tb; OffsetRect(&lb, -dp(28), 0);
+    g_rcLang = lb;
+    fillHover(lb.left, lb.top, lb.right, lb.bottom, dp(4), 2 * anim(ANIM_LANG, g_hotBtn == BTN_LANG));
+    drawGlyph(g_fIcon, 0xE774, (lb.left + lb.right) / 2, (lb.top + lb.bottom) / 2, textRGB());
 
     int y = top + dp(58), itemH = dp(38), gap = dp(4);
     for (int i = 0; i < NAV_COUNT; i++) {
@@ -212,6 +218,7 @@ static int hitButton(int x, int y) {
     if (PtInRect(&g_rcUefi, p)) return BTN_UEFI;
     if (PtInRect(&g_rcUsbBoot, p)) return BTN_USBBOOT;
     if (PtInRect(&g_rcTheme, p)) return BTN_THEME;
+    if (PtInRect(&g_rcLang, p)) return BTN_LANG;
     if (g_page == PAGE_AIO || g_page == PAGE_REPAIR || g_page == PAGE_TWEAKS || g_page == PAGE_RUNTI || g_page == PAGE_DOWNLOAD || g_page == PAGE_APPS || g_page == PAGE_OFFICE || g_page == PAGE_REMOVE) {
         int id = aioHitTest(x, y);
         return id ? BTN_WIDGET + id : -1;
@@ -290,6 +297,19 @@ static void bootToFirmware(void) {
                            L"Press Del during startup instead.", code);
         okDialog(L"Couldn't restart", msg);
     }
+}
+
+// The language list: Follow Windows, then each language under its own name
+static void langPick(void) {
+    const wchar_t* items[7] = { L"Follow Windows" };
+    for (int i = 0; i < 6; i++) items[i + 1] = LANG_LIST[i].name;
+    int pick = g_langSet + 1;
+    DlgExtra list; memset(&list, 0, sizeof(list));
+    list.items = items; list.nItems = 7; list.pick = &pick;
+    if (!showDialogEx(g_hwnd, L"Language", L"Choose the app's language. Logs and output boxes stay in English.",
+                      NULL, 0, L"Choose", L"Cancel", 0, &list)) return;
+    langChoose(pick - 1);
+    InvalidateRect(g_hwnd, NULL, FALSE);
 }
 
 static void aioClick(int id, int x, int y) {
@@ -405,6 +425,7 @@ static void onLeftButtonUp(int x, int y) {
         else if (b == BTN_UPDGET) updClicked(UPD_MSU);
         else if (b == BTN_UPDNDP) updClicked(UPD_NDP);
         else if (b == BTN_THEME) startFade(FADE_THEME, 0);
+        else if (b == BTN_LANG) langPick();
         else if (b >= BTN_VIEW && b < BTN_VIEW + NCAT) viewCategory(&g_cat[b - BTN_VIEW]);
         else if (b == BTN_SROFF && g_busy == 0) doSrSwitch();
         else if (b >= BTN_WIDGET) aioClick(b - BTN_WIDGET, x, y);
@@ -848,6 +869,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, PWSTR cmd, int show) {
 
     g_dpi = GetDpiForSystem();
     loadTheme();
+    langLoad();
     if (cmd && wcsstr(cmd, L"--light")) g_dark = FALSE;
     if (cmd && wcsstr(cmd, L"--dark"))  g_dark = TRUE;
     g_accent = readAccent();

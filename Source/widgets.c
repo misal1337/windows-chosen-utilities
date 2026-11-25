@@ -95,8 +95,10 @@ static void aioField(int id, RECT rc, wchar_t* buf, int cch, BOOL ro, const wcha
         if (xb > inner) xb = inner;
         fillAccentRect(in.left + xa, rc.top + dp(6), in.left + xb, rc.bottom - dp(6), 0.45);
     }
+    g_trOff = TRUE;      // what's typed
     drawText(g_fSmall, buf + start, in, textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX |
              (focus ? 0 : DT_PATH_ELLIPSIS));
+    g_trOff = FALSE;
     if (focus && !ro) {
         int x = in.left + textWidthN(g_fSmall, buf + start, g_caret - start);
         Col t = textCol();

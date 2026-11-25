@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 $zig = "$HOME\wcu-tools\zig\zig.exe"
 if (-not (Test-Path $zig)) { $zig = (Get-Command zig -ErrorAction Stop).Source }
 Set-Location $PSScriptRoot
+& "$PSScriptRoot\lang.ps1"
 $out = 'Windows Chosen Utilities.exe'
 # baseline: without it Zig builds for the CPU doing the build (AVX2 and newer), and the exe crashes at start on PCs without those
 $args = @('cc','app.c','app.rc','-o',$out,'-O2','-municode','-mcpu=baseline',

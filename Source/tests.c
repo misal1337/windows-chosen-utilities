@@ -187,7 +187,7 @@ int wmain(void) {
         const wchar_t* AR[] = { L"[DL:5MiB][#a 1MiB/2MiB(50%)]", L"", L"11/25 07:34:39 [ERROR] CUID#1 - Download aborted. URI=http://x", L"Exception: [A.cc:351] errorCode=22 URI=http://x", L"  -> [H.cc:239] errorCode=22 The response status is not successful. status=403",
             L"[DL:6MiB][#a 1MiB/2MiB(60%)]", L"11/25 07:34:40 [ERROR] CUID#2 - Download aborted. URI=http://y", L"Exception: [A.cc:351] errorCode=22 URI=http://y", L"  -> [H.cc:239] errorCode=22 The response status is not successful. status=403",
             L"11/25 07:34:41 [ERROR] CUID#3 - Download aborted. URI=http://z", L"Exception: [A.cc:351] errorCode=3 URI=http://z", L"  -> [H.cc:239] errorCode=3 Resource not found. status=404", L"other text" };
-        g_repRefused = g_repHeldN = 0;
+        g_repRefused = g_repDropped = g_repHeldN = 0;
         for (int i = 0; i < 13; i++) repAriaRow(aw, AR[i]);
         repAriaFlush(aw);
         static wchar_t ab[8192]; DWORD ag = 0;

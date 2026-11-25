@@ -45,6 +45,7 @@ static void swapSurface(Surface* s) {
 
 static int measureWrapped(WFont font, const wchar_t* s, int width) {
     if (!s || !*s) return 0;
+    s = tr(s);
     IDWriteTextLayout* l = textLayout(font, s, -1, (float)width, 100000.0f);
     if (!l) return 0;
     DWRITE_TEXT_METRICS m; memset(&m, 0, sizeof(m));
@@ -96,7 +97,9 @@ static void dlgPaintInput(DlgState* d, int left, int right, int y) {
         int a = min(d->selA, d->caret), b = max(d->selA, d->caret);
         fillAccentRect(in.left + textWidthN(g_fBody, t, a), rc.top + dp(7), in.left + textWidthN(g_fBody, t, b), rc.bottom - dp(7), 0.45);
     }
+    g_trOff = TRUE;      // what's typed
     drawText(g_fBody, t, in, textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    g_trOff = FALSE;
     int cx = in.left + textWidthN(g_fBody, t, d->caret);
     Col c = textCol();
     fillRect(cx, rc.top + dp(8), cx + max(1, dp(1)), rc.bottom - dp(8), c.r, c.g, c.b, c.a);
