@@ -1,4 +1,37 @@
+#include <winver.h>
+#include "version.h"
+
 1 ICON "app.ico"
+
+// file properties: SignPath needs the product name and version set on every signed file
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION    WCU_VER_MAJOR, WCU_VER_MINOR, 0, 0
+PRODUCTVERSION WCU_VER_MAJOR, WCU_VER_MINOR, 0, 0
+FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+FILEFLAGS      0
+FILEOS         VOS_NT_WINDOWS32
+FILETYPE       VFT_APP
+FILESUBTYPE    0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "ProductName",      "Windows Chosen Utilities"
+      VALUE "FileDescription",  "Windows Chosen Utilities"
+      VALUE "ProductVersion",   WCU_VER_STR
+      VALUE "FileVersion",      WCU_VER_STR
+      VALUE "InternalName",     "Windows Chosen Utilities"
+      VALUE "OriginalFilename", "Windows Chosen Utilities.exe"
+      VALUE "CompanyName",      "misal1337"
+      VALUE "LegalCopyright",   "Copyright (c) 2026 misal1337. MIT licence."
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
 2 RCDATA "settings.json"
 10 RCDATA "tweaks/Remove_Explore_background_context-menu_for_all_users.reg"
 11 RCDATA "tweaks/Add_Explore_background_context-menu_for_all_users.reg"

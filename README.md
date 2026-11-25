@@ -68,6 +68,39 @@ and run it. Nothing is installed.
 - To build from source: install [Zig](https://ziglang.org/download/) (no Visual Studio needed), then `cd Source`
   and run `.\build.ps1`.
 
+## Code signing policy
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+*(Applied for; until it is approved, releases are unsigned.)*
+
+- Committers and reviewers: [misal1337](https://github.com/misal1337)
+- Approvers: [misal1337](https://github.com/misal1337)
+
+Every release exe is built by GitHub Actions from the source in this repository
+([build workflow](.github/workflows/build.yml)). Each signing request is approved by hand, and only files built
+from this repository are signed.
+
+## Privacy policy
+This program will not transfer any information to other networked systems unless specifically requested by the
+user or the person installing or operating it.
+
+It collects no data and has no telemetry. When you use these features it connects to the services they need, whose
+own privacy policies apply:
+- **Download Windows, Manual Updates:** [UUP dump](https://uupdump.net) and Microsoft's update servers.
+- **Windows AIO → ESD to ISO:** GitHub, to fetch abbodi1406's [esd-decrypter-wimlib](https://github.com/abbodi1406/BatUtil).
+- **MS Office 365:** Microsoft's Office CDN. Opening this page checks it for the newest builds.
+- **Install Apps:** the publishers' download servers (Mozilla, Internet Download Manager, PotPlayer/Kakao, Google,
+  Tailscale) and the Microsoft Store for NanaZip. Opening this page checks those servers for the newest versions.
+
+## What it changes on your PC
+Each page says what its buttons do before you press them, and changes that need administrator rights ask through
+UAC first. The Misc Tweaks Enable/Disable switches work both ways, so those changes can be undone (Terminal
+Settings Restore replaces Windows Terminal's settings and doesn't keep the old file). Apps installed by Install Apps
+uninstall normally from Windows Settings, and Remove Apps can reinstall what it removed.
+
+## How it's made
+Developed with the help of Claude (Anthropic's AI assistant) in Claude Code. Every change is reviewed and published
+by [misal1337](https://github.com/misal1337).
+
 ## Licence
 MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projects and keep their own notices:
 - `Source/assoc.c` (UserChoice hash) follows [PS-SFTA](https://github.com/DanysysTeam/PS-SFTA) by DanysysTeam.

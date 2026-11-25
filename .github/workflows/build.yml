@@ -1,0 +1,81 @@
+# Builds Windows Chosen Utilities from this repository's source on GitHub's own Windows runner.
+# - Every push and pull request: build, and keep the exe as a workflow artifact.
+# - A pushed tag like v1.6: also sign it through SignPath (once the SignPath settings below exist)
+#   and publish it on the Releases page.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # publish the release on a tag
+  actions: read     # SignPath reads this job's details and downloads the artifact
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Zig 0.17.1 (checked against ziglang.org's published SHA-256)
+        shell: pwsh
+        run: |
+          $url = 'https://ziglang.org/download/0.17.1/zig-x86_64-windows-0.17.1.zip'
+          Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP\zig.zip"
+          $hash = (Get-FileHash "$env:RUNNER_TEMP\zig.zip" -Algorithm SHA256).Hash
+          if ($hash -ne 'B03F477A1943673E02ACA0F570E8030DFFD536CE1F45CBC4D3326EC31159562E') { throw "Zig download hash mismatch: $hash" }
+          Expand-Archive "$env:RUNNER_TEMP\zig.zip" $env:RUNNER_TEMP
+          "$env:RUNNER_TEMP\zig-x86_64-windows-0.17.1" | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Build
+        shell: pwsh
+        run: ./Source/build.ps1
+
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $v = (Get-Item 'Source/Windows Chosen Utilities.exe').VersionInfo.ProductVersion
+          if ("v$v" -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME but the exe says $v (Source/version.h)" }
+
+      - name: Keep the unsigned exe
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-chosen-utilities-unsigned
+          path: Source/Windows Chosen Utilities.exe
+          if-no-files-found: error
+
+      # Runs only on a release tag, and only after SignPath has accepted the project and the
+      # SIGNPATH_ORGANIZATION_ID variable and SIGNPATH_API_TOKEN secret are set in the repo settings.
+      - name: Sign with SignPath
+        if: startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: windows-chosen-utilities
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600   # each release is approved by hand on signpath.io
+          output-artifact-directory: signed
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $src = if (Test-Path 'signed/Windows Chosen Utilities.exe') { 'signed/Windows Chosen Utilities.exe' } else { 'Source/Windows Chosen Utilities.exe' }
+          Copy-Item $src 'Windows.Chosen.Utilities.exe'   # GitHub can't keep spaces in release file names
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:GITHUB_REF_NAME 'Windows.Chosen.Utilities.exe' --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME 'Windows.Chosen.Utilities.exe' --title "Windows Chosen Utilities $env:GITHUB_REF_NAME" --generate-notes
+          }

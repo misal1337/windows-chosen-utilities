@@ -121,7 +121,8 @@ typedef IDWriteTextFormat* WFont;
 static WFont g_fBody, g_fBodyBold, g_fSmall, g_fH1, g_fTitle, g_fIcon, g_fIconLg, g_fHeadIcon, g_fMono, g_fTiny;
 
 // Shown in the window's bottom-right corner. Changed only when the user says so.
-#define WCU_VERSION L"v1.5"
+#include "version.h"
+#define WCU_VERSION L"v" WCU_VER_STR
 static IDWriteFactory* g_dw = NULL;
 static ID2D1Factory* g_d2d = NULL;
 static ID2D1DCRenderTarget* g_rt = NULL;
