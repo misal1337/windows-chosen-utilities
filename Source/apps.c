@@ -46,7 +46,7 @@ static const AppDef APPS[APP_COUNT] = {
 };
 #define IDM_PAGE L"https://www.internetdownloadmanager.com/download.html"
 static const wchar_t* POT_EXTS[] = { L".mp4", L".mkv", L".mpg", L".mpeg", L".wmv" };
-static const wchar_t* NANAZIP_EXTS[] = { L".zip", L".rar" };
+static const wchar_t* NANAZIP_EXTS[] = { L".zip", L".rar", L".7z" };
 
 // what the helper's exit code says: the step in the top byte, Windows' or the installer's code below it
 enum { APS_OK, APS_LINK, APS_DOWNLOAD, APS_SIGN, APS_INSTALL, APS_MISSING, APS_FOLDER };
@@ -544,8 +544,122 @@ static DWORD appsRunLogged(const wchar_t* exe, wchar_t* cmd) {
     return waitExitCode(pi.hProcess);
 }
 
+// IDM's own update (Help > Check for updates): idmupdt.exe from its update folder, not the full installer from the
+// download page. IDM's servers send it to one of their mirrors, and some mirrors still hold an older build, so each is
+// tried in turn until one gives a signed idmupdt.exe of the newest version (its file version, such as 6.43.19.x).
+static const wchar_t* IDM_UPD_HOSTS[] = {
+    L"www", L"mirror2", L"mirror3", L"mirror4", L"mirror5", L"test", L"mirror1", L"mirror6" };
+#define IDM_UPD_PATH L"/updates/dfghrtv3465773FRJD843dedhx250dlAsb/idmupdt.exe"
+
+static BOOL appsFileVersion(const wchar_t* path, DWORD* ms, DWORD* ls) {
+    DWORD h, n = GetFileVersionInfoSizeW(path, &h);
+    if (!n) return FALSE;
+    void* b = malloc(n);
+    VS_FIXEDFILEINFO* fi = NULL; UINT fl = 0;
+    BOOL ok = b && GetFileVersionInfoW(path, 0, n, b) && VerQueryValueW(b, L"\\", (void**)&fi, &fl) && fi && fl >= sizeof(*fi);
+    if (ok) { *ms = fi->dwFileVersionMS; *ls = fi->dwFileVersionLS; }
+    free(b);
+    return ok;
+}
+
+static DWORD appsIdmFetchUpdate(const wchar_t* path) {
+    wchar_t page[600], url[600]; DWORD e;
+    appsProgress(APP_STEP_LINK, 0);
+    appsSay(L"Finding IDM's newest update…");
+    if (!appsIdmLink(page, 600, &e)) { appsSay(L"Couldn't find it (error %lu).", e); return APS_CODE(APS_LINK, e); }
+    long v = 0, b = 0;
+    if (swscanf(PathFindFileNameW(page), L"idman%ldbuild%ld", &v, &b) != 2 || v <= 0) {
+        appsSay(L"Couldn't read the newest version from %s.", page); return APS_CODE(APS_LINK, ERROR_NOT_FOUND); }
+    DWORD want = ((DWORD)(v / 100) << 16) | (DWORD)(v % 100);
+    DWORD last = APS_CODE(APS_DOWNLOAD, ERROR_NOT_FOUND);
+    for (int i = 0; i < (int)(sizeof(IDM_UPD_HOSTS) / sizeof(IDM_UPD_HOSTS[0])); i++) {
+        swprintf(url, 600, L"https://%s.internetdownloadmanager.com" IDM_UPD_PATH L"?v=%ldbuild%ld&filename=idmupdt.exe", IDM_UPD_HOSTS[i], v, b);
+        appsSay(L"From %s", url);
+        appsProgress(APP_STEP_DOWNLOAD, 0);
+        appsSay(L"Downloading…");
+        DWORD status = 0; int lastMb = -1;
+        e = dlHttpCore(url, NULL, path, &status, FALSE, appsDownloadTick, &lastMb);
+        if (e || status != 200) {
+            appsSay(e ? L"Download failed (error %lu)." : L"Download failed (HTTP %lu).", e ? e : status);
+            last = APS_CODE(APS_DOWNLOAD, e ? e : status);
+            DeleteFileW(path);
+            continue;
+        }
+        WIN32_FILE_ATTRIBUTE_DATA fa;
+        double mb = GetFileAttributesExW(path, GetFileExInfoStandard, &fa) ? (double)fileBytes(fa.nFileSizeHigh, fa.nFileSizeLow) / 1048576.0 : 0;
+        appsSayOver(L"Downloaded %.1f MB.", mb);
+        appsProgress(APP_STEP_SIGN, 0);
+        HRESULT hr = appsCheckSigner(path, L"Tonec Inc.");
+        if (hr != S_OK) {
+            appsSay(L"Signature check failed (0x%08lX). Deleted the download.", (DWORD)hr);
+            DeleteFileW(path);
+            return APS_CODE(APS_SIGN, (DWORD)hr & 0xFFFF);
+        }
+        appsSay(L"Signature checked: signed by Tonec Inc.");
+        DWORD ms = 0, ls = 0;
+        if (appsFileVersion(path, &ms, &ls) && ms == want && HIWORD(ls) == (DWORD)b) return 0;
+        appsSay(L"That server still has the update for %u.%02u build %u, not %ld.%02ld build %ld. Trying the next one…",
+                HIWORD(ms), LOWORD(ms), HIWORD(ls), v / 100, v % 100, b);
+        last = APS_CODE(APS_DOWNLOAD, ERROR_NOT_FOUND);
+        DeleteFileW(path);
+    }
+    appsSay(L"No IDM server had the update for %ld.%02ld build %ld yet. Try again later.", v / 100, v % 100, b);
+    return last;
+}
+
+// idmupdt.exe unpacks IDM's setup (IDM1.tmp) and exits at once, so the setup is waited for here. Run as an update it
+// still opens its licence page in silent mode; the page is accepted (the full setup accepts it silently too), and the
+// rest runs without dialogs. Returns the setup's exit code.
+typedef struct { int id; HWND found; } AppsFindCtl;
+static BOOL CALLBACK appsFindCtlProc(HWND h, LPARAM lp) {
+    AppsFindCtl* f = (AppsFindCtl*)lp;
+    if (GetDlgCtrlID(h) == f->id) { f->found = h; return FALSE; }
+    return TRUE;
+}
+static HWND appsFindCtl(HWND top, int id) {      // a control anywhere inside the window (the pages are child dialogs)
+    AppsFindCtl f = { id, NULL };
+    EnumChildWindows(top, appsFindCtlProc, (LPARAM)&f);
+    return f.found;
+}
+static BOOL CALLBACK appsIdmPageProc(HWND h, LPARAM lp) {
+    DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
+    const DWORD* pids = (const DWORD*)lp;
+    BOOL ours = FALSE;
+    for (int i = 1; i <= (int)pids[0]; i++) if (pids[i] == pid) ours = TRUE;
+    if (!ours || !IsWindowVisible(h)) return TRUE;
+    HWND accept = appsFindCtl(h, 1063), next = appsFindCtl(h, 1008);   // "I accept the terms…", "Next >"
+    if (accept && next && IsWindowVisible(accept) && IsWindowEnabled(accept)) {
+        SendMessageTimeoutW(accept, BM_CLICK, 0, 0, SMTO_ABORTIFHUNG, 2000, NULL);
+        PostMessageW(next, BM_CLICK, 0, 0);
+        appsSay(L"Accepted IDM's licence page (its update shows it even when silent).");
+    }
+    return TRUE;
+}
+static DWORD appsIdmWaitSetup(void) {
+    DWORD code = 0;
+    HANDLE setup = NULL;
+    ULONGLONG until = GetTickCount64() + 30 * 60 * 1000, lastAccept = 0;
+    for (;;) {
+        DWORD pids[17]; int n = appsPids(L"IDM1.tmp", pids + 1, 16);
+        if (!n) break;
+        if (!setup) setup = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pids[1]);
+        if (GetTickCount64() - lastAccept > 3000) {   // gives the page time to change before looking again
+            pids[0] = (DWORD)n;
+            EnumWindows(appsIdmPageProc, (LPARAM)pids);
+            lastAccept = GetTickCount64();
+        }
+        if (GetTickCount64() > until) { code = WAIT_TIMEOUT; break; }
+        Sleep(500);
+    }
+    if (setup) {
+        if (!code && WaitForSingleObject(setup, 5000) == WAIT_OBJECT_0) GetExitCodeProcess(setup, &code);
+        CloseHandle(setup);
+    }
+    return code;
+}
+
 static void appsIdmDriver(const AppDef* a);
-static DWORD appsInstall(int app) {
+static DWORD appsInstall(int app, BOOL update) {
     const AppDef* a = &APPS[app];
     // a folder only administrators and SYSTEM can write, so a normal-rights program can't swap the installer
     wchar_t dir[MAX_PATH], path[MAX_PATH], url[600];
@@ -558,9 +672,14 @@ static DWORD appsInstall(int app) {
     DWORD e = made ? 0 : GetLastError();
     LocalFree(sa.lpSecurityDescriptor);
     if (!made) { appsSay(L"Couldn't make the download folder (error %lu).", e); return APS_CODE(APS_FOLDER, e); }
-    swprintf(path, MAX_PATH, L"%s\\%s", dir, a->fileName);
+    BOOL quick = app == APP_IDM && update;  // IDM updates with its own idmupdt.exe
+    swprintf(path, MAX_PATH, L"%s\\%s", dir, quick ? L"idmupdt.exe" : a->fileName);
 
     DWORD result = 0;
+    if (quick) {
+        result = appsIdmFetchUpdate(path);
+        goto run;
+    }
     appsProgress(APP_STEP_LINK, 0);
     appsSay(L"Finding the newest %s…", a->name);
     if (!appsResolveUrl(app, url, 600, &e)) { result = APS_CODE(APS_LINK, e); appsSay(L"Couldn't find it (error %lu).", e); }
@@ -592,6 +711,7 @@ static DWORD appsInstall(int app) {
         if (hr != S_OK) { result = APS_CODE(APS_SIGN, (DWORD)hr & 0xFFFF); appsSay(L"Signature check failed (0x%08lX). Deleted the download.", (DWORD)hr); }
         else appsSay(L"Signature checked: signed by %s", a->signer);
     }
+run:
     if (!result) {
         appsProgress(APP_STEP_INSTALL, 0);
         DWORD before[64]; int nb = a->closeFirst ? appsPids(a->exe, before, 64) : 0;
@@ -614,7 +734,7 @@ static DWORD appsInstall(int app) {
             } else {
                 lstrcpynW(runner, path, MAX_PATH);
                 swprintf(cmd, MAX_PATH * 2 + 400, L"\"%s\" %s", path, a->args);
-                appsSay(L"Running: %s %s", a->fileName, a->args);
+                appsSay(L"Running: %s %s", PathFindFileNameW(path), a->args);
             }
             STARTUPINFOW si = { sizeof(si) }; PROCESS_INFORMATION pi;
             if (!CreateProcessW(runner, cmd, NULL, NULL, FALSE, 0, NULL, dir, &si, &pi)) code = GetLastError();
@@ -623,6 +743,7 @@ static DWORD appsInstall(int app) {
                 if (WaitForSingleObject(pi.hProcess, 30 * 60 * 1000) == WAIT_TIMEOUT) code = WAIT_TIMEOUT;
                 else GetExitCodeProcess(pi.hProcess, &code);
                 CloseHandle(pi.hProcess);
+                if (quick && code == 0) code = appsIdmWaitSetup();
             }
         }
         appsSay(L"Installer finished, exit code %lu%s.", code,
@@ -683,7 +804,7 @@ static int appsHelperMain(const wchar_t* cmd) {
     int app = _wtoi(cmd + 15);                 // --apps-install=N
     if (app < 0 || app >= APP_COUNT) return (int)APS_CODE(APS_INSTALL, ERROR_INVALID_PARAMETER);
     g_appsNotify = cmdNotify(cmd);
-    return (int)appsInstall(app);
+    return (int)appsInstall(app, wcsstr(cmd, L" --update") != NULL);
 }
 
 // ---------- default apps for file types (as the signed-in user) ----------
@@ -925,7 +1046,7 @@ static void appsStoreStart(int app) {
     swprintf(title, 80, L"Install %s?", a->name);
     swprintf(body, 400, L"This installs %s from the Microsoft Store, which keeps it updated from then on%s%s.", a->name,
              g_appsVer[app][0] ? L" (it replaces the copy installed now and keeps its settings)" : L"",
-             app == APP_NANAZIP ? L", and makes it the default for ZIP and RAR files. ISO files stay with Windows Explorer" : L"");
+             app == APP_NANAZIP ? L", and makes it the default for ZIP, RAR and 7Z files. ISO files stay with Windows Explorer" : L"");
     if (!showDialog(g_hwnd, title, body, NULL, 0, L"Install", L"Cancel", 1)) return;    // no UAC here, so this is the one prompt
     if (!jobBegin()) return;
     g_appsUpdating = FALSE;
@@ -943,40 +1064,39 @@ static void appsStart(int app, BOOL update) {
     if (g_busy != 0 || app < 0 || app >= APP_COUNT) return;
     const AppDef* a = &APPS[app];
     if (a->storeId) { appsStoreStart(app); return; }
+    BOOL reinstall = !update && app == APP_IDM && g_appsVer[app][0];    // IDM's full setup over the copy there
     DWORD pids[4];
     if (a->closeFirst && appsPids(a->exe, pids, 4)) {
         wchar_t title[80], body[300];
         swprintf(title, 80, L"Close %s first", a->name);
         swprintf(body, 300, app == APP_IDM
             ? L"%s is running. It may only show in the notification area: right-click its icon and choose Exit. Then press %s again."
-            : L"%s is open. Close it, then press %s again.", a->name, update ? L"Update" : a->label);
+            : L"%s is open. Close it, then press %s again.", a->name, update ? L"Update" : reinstall ? L"Reinstall IDM" : a->label);
         okDialog(title, body);
         return;
     }
-    if (askInApp()) {
+    if (!update && askInApp()) {            // Update starts at once (user's choice); install and reinstall ask first
         wchar_t title[80], body[400];
-        if (update) {
-            swprintf(title, 80, L"Update %s?", a->name);
-            swprintf(body, 400, L"This installs %s %s over %s, silently. %s", a->name, g_appsLatest[app], g_appsVer[app],
-                     app == APP_CRD ? L"Anyone connected to this PC through Chrome Remote Desktop is disconnected for a moment."
-                     : app == APP_TAILSCALE ? L"Tailscale's connection drops for a moment while it updates."
-                     : L"Its settings are kept.");
+        if (reinstall) {
+            swprintf(title, 80, L"Reinstall %s?", a->name);
+            swprintf(body, 400, L"This downloads the full setup of the newest %s from its publisher and installs it silently over %s. "
+                     L"Its settings are kept. Afterwards you can import your own settings from a .reg file.", a->name, g_appsVer[app]);
         } else {
             swprintf(title, 80, L"Install %s?", a->name);
             if (app == APP_POT)
                 swprintf(body, 400, L"This downloads the newest %s, installs it silently, applies the settings built into this app "
                          L"(replacing its current settings), and makes it the default for MP4, MKV, MPG, MPEG and WMV files.", a->name);
             else if (app == APP_NANAZIP)
-                swprintf(body, 400, L"This downloads the newest %s, installs it silently, and makes it the default for ZIP and RAR files.", a->name);
+                swprintf(body, 400, L"This downloads the newest %s, installs it silently, and makes it the default for ZIP, RAR and 7Z files.", a->name);
             else if (app == APP_IDM)
                 swprintf(body, 400, L"This downloads the newest %s from its publisher and installs it silently. "
                          L"Afterwards you can import your own settings from a .reg file.", a->name);
             else swprintf(body, 400, L"This downloads the newest %s from its publisher and installs it silently.", a->name);
         }
-        if (!showDialog(g_hwnd, title, body, NULL, 0, update ? L"Update" : L"Install", L"Cancel", 1)) return;
+        if (!showDialog(g_hwnd, title, body, NULL, 0, reinstall ? L"Reinstall" : L"Install", L"Cancel", 1)) return;
     }
     wchar_t args[32]; BOOL cancelled = FALSE;
-    swprintf(args, 32, L"--apps-install=%d", app);
+    swprintf(args, 32, L"--apps-install=%d%s", app, update ? L" --update" : L"");
     HANDLE helper = NULL;
     if (g_elevated) helper = startHelperDirect(args);
     else if (!startElevatedHelper(args, &helper, &cancelled)) helper = NULL;
@@ -999,7 +1119,7 @@ static void appsStart(int app, BOOL update) {
     if (g_appsLogN) appsLogAdd(L"", FALSE);
     wchar_t head[200];
     if (update) swprintf(head, 200, L"> Update %s %s -> %s", a->name, g_appsVer[app], g_appsLatest[app]);
-    else swprintf(head, 200, L"> Install %s", a->name);
+    else swprintf(head, 200, reinstall ? L"> Reinstall %s (full setup)" : L"> Install %s", a->name);
     appsLogAdd(head, FALSE);
     startWorker(appsProc, j);
     InvalidateRect(g_hwnd, NULL, FALSE);
@@ -1036,7 +1156,7 @@ static void appsOnDone(DWORD fin) {
             swprintf(g_appsMsg, 400, L"%s %s is installed, with its settings applied. It's now the default for MP4, MKV, MPG, MPEG and WMV files.",
                      a->name, g_appsVer[app]);
         else if (app == APP_NANAZIP)
-            swprintf(g_appsMsg, 400, L"%s %s is installed from the Microsoft Store, which keeps it updated. It's now the default for ZIP and RAR files; "
+            swprintf(g_appsMsg, 400, L"%s %s is installed from the Microsoft Store, which keeps it updated. It's now the default for ZIP, RAR and 7Z files; "
                                      L"ISO files open with Windows Explorer.",
                      a->name, g_appsVer[app]);
         else if (app == APP_CRD)
@@ -1165,7 +1285,9 @@ static void drawApps(int cL, int cR) {
     BOOL en = g_busy == 0, shield = !g_elevated;
     static const int IDS[APP_COUNT] = { A_P_FIREFOX, A_P_IDM, A_P_POT, A_P_CRD, A_P_NANAZIP, A_P_TAILSCALE };
     for (int i = 0; i < APP_COUNT; i++) {
-        aioButton(IDS[i], x1, y, x1 + bw, y + bh, APPS[i].label, FALSE, en, shield && !APPS[i].storeId);
+        // IDM installed: its button reinstalls with the full setup (Update uses IDM's own smaller update)
+        const wchar_t* lbl = i == APP_IDM && g_appsVer[i][0] ? L"Reinstall IDM" : APPS[i].label;
+        aioButton(IDS[i], x1, y, x1 + bw, y + bh, lbl, FALSE, en, shield && !APPS[i].storeId);
         wchar_t st[160];
         BOOL upd = g_appsRun != i && appsHasUpdate(i);
         if (g_appsRun == i) wcscpy(st, g_appsUpdating ? L"Updating…" : L"Installing…");
@@ -1188,9 +1310,9 @@ static void drawApps(int cL, int cR) {
     }
     y += dp(4);
     RECT n1 = { x1, y, x2, y + noteH };
-    drawText(g_fSmall, L"Installed silently from the publisher, signature checked, with one shortcut in Programs and none on the desktop. "
+    drawText(g_fSmall, L"Installed silently from the publisher, signature checked, with one shortcut in Start Menu and none on the desktop. "
                        L"Pot Player gets this app's settings and opens MP4, MKV, MPG, MPEG and WMV. NanaZip comes from the "
-                       L"Microsoft Store, which updates it, and opens ZIP and RAR.",
+                       L"Microsoft Store, which updates it, and opens ZIP, RAR and 7Z.",
              n1, mutedRGB(), DT_LEFT | DT_WORDBREAK);
 
     wchar_t now[200] = L"";

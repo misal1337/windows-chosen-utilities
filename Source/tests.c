@@ -6,6 +6,8 @@ static void mkfile(const wchar_t* path, int bytes) {
     WriteFile(h, buf, bytes, &wr, NULL); CloseHandle(h); free(buf);
 }
 int wmain(void) {
+    setvbuf(stdout, NULL, _IONBF, 0);       // every line out at once, so a crash shows where it happened
+    InitializeCriticalSection(&g_lock);     // as the app does at its start: the output panel's tests take it early
     wchar_t base[MAX_PATH], sand[MAX_PATH];
     GetTempPathW(MAX_PATH, base);
     swprintf(sand, MAX_PATH, L"%swcu_test_%lu", base, GetCurrentProcessId());
@@ -134,15 +136,58 @@ int wmain(void) {
     {
         static const struct { int at; const wchar_t* s; } RUN[] = {
             { 0, L"=== Checking UUP Info . . ." }, { 40, L"=== Creating install.wim . . ." }, { 100, L"=== Updating install.wim / 2 image{s} . . ." },
-            { 120, L"=== Servicing Index: 1" }, { 160, L"=== Adding Microsoft Edge . . ." }, { 160, L"=== Adding Apps . . ." }, { 321, L"=== Adding Updates . . ." },
-            { 341, L"=== Adding LCU 09818-Windows11.0-KB5127936-x64.msu" }, { 1102, L"=== Servicing Index: 2" }, { 1142, L"=== Adding Microsoft Edge . . ." },
-            { 1142, L"=== Adding Apps . . ." }, { 1302, L"=== Adding Updates . . ." }, { 1322, L"=== Adding LCU 09818-Windows11.0-KB5127936-x64.msu" },
+            { 120, L"=== Servicing Index: 1" }, { 160, L"=== Adding Microsoft Edge . . ." }, { 160, L"=== Adding Apps . . ." }, { 250, L"Deployment Image Servicing and Management tool" }, { 321, L"=== Adding Updates . . ." },
+            { 341, L"=== Adding LCU 09818-Windows11.0-KB5127936-x64.msu" },
+            { 668, L"The operation completed successfully." }, { 775, L"The operation completed successfully." }, { 1064, L"Unmounting image" },      // inside the update: split in proportion to RUN1's
+            { 1102, L"=== Servicing Index: 2" }, { 1142, L"=== Adding Microsoft Edge . . ." },
+            { 1142, L"=== Adding Apps . . ." }, { 1230, L"Deployment Image Servicing and Management tool" }, { 1302, L"=== Adding Updates . . ." }, { 1322, L"=== Adding LCU 09818-Windows11.0-KB5127936-x64.msu" },
+            { 1770, L"The operation completed successfully." }, { 1916, L"The operation completed successfully." }, { 2312, L"Unmounting image" },
             { 2364, L"=== Rebuilding install.wim . . ." }, { 2384, L"=== Creating winre.wim . . ." }, { 2444, L"=== Remounting image . . ." }, { 2444, L"=== Adding LCU for boot.wim . . ." },
             { 2464, L"=== Adding LCU 09818-Windows11.0-KB5127936-x64.msu" }, { 2645, L"=== Adding winre.wim to install.wim . . ." }, { 2665, L"=== Creating ISO . . ." } };
+        // and the Pro build of 25 Nov 2026, from DISM's log
+        static const struct { int at; const wchar_t* s; } RUN1[] = {
+            { 0, L"=== Checking UUP Info . . ." }, { 135, L"=== Updating install.wim / 1 image{s} . . ." }, { 148, L"=== Servicing Index: 1" }, { 180, L"=== Adding Microsoft Edge . . ." },
+            { 185, L"=== Adding Apps . . ." }, { 235, L"Deployment Image Servicing and Management tool" }, { 270, L"=== Adding Updates . . ." }, { 307, L"=== Adding LCU 10075-Windows11.0-KB5132057-x64.msu" }, { 758, L"The operation completed successfully." }, { 904, L"The operation completed successfully." },
+            { 1300, L"Saving image" }, { 1330, L"The operation completed successfully." }, { 1332, L"Unmounting image" }, { 1383, L"The operation completed successfully." }, { 1384, L"=== Rebuilding install.wim . . ." }, { 1434, L"=== Creating winre.wim . . ." },
+            { 1510, L"=== Remounting image . . ." }, { 1535, L"=== Adding LCU for boot.wim . . ." }, { 1773, L"=== Adding winre.wim to install.wim . . ." }, { 1785, L"=== Creating ISO . . ." } };
+        BOOL ok1 = TRUE;
+        {
+            DlProg p; ULONGLONG c = 1000000, end = c + 1807000; int last = 0, k = 0;
+            dlpBegin(&p, 1, 0, 10, 1, c - 313000); dlpStep(&p, 3, c);
+            for (ULONGLONG n = c; n < end; n += 60000) {
+                for (; k < (int)(sizeof(RUN1) / sizeof(RUN1[0])) && c + RUN1[k].at * 1000ULL <= n; k++) dlpLine(&p, RUN1[k].s, c + RUN1[k].at * 1000ULL);
+                double left = dlpLeft(&p, n), real = (end - n) / 1000.0; int pct = dlpPercent(&p, n); wchar_t x[160];
+                if (pct < last || fabs(left - real) > 240) ok1 = FALSE;      // within 4 minutes all the way
+                last = pct; dlpText(&p, n, x, 160); wprintf(L"  pro %s  (really %.1f min)\n", x, real / 60);
+            }
+        }
+        // and the Home and Pro build of the same day, with all the apps: the save after them held the bar for four minutes
+        static const struct { int at; const wchar_t* s; } RUN2[] = {
+            { 0, L"=== Checking UUP Info . . ." }, { 135, L"=== Updating install.wim / 2 image{s} . . ." }, { 149, L"=== Servicing Index: 1" }, { 196, L"=== Adding Microsoft Edge . . ." },
+            { 196, L"Deployment Image Servicing and Management tool" }, { 200, L"=== Adding Apps . . ." }, { 371, L"Deployment Image Servicing and Management tool" }, { 508, L"=== Adding Updates . . ." },
+            { 548, L"=== Adding LCU 09974-Windows11.0-KB5132061-x64.msu" }, { 1000, L"The operation completed successfully." }, { 1154, L"The operation completed successfully." }, { 1647, L"Unmounting image" },
+            { 1745, L"=== Servicing Index: 2" }, { 1792, L"=== Adding Microsoft Edge . . ." }, { 1792, L"Deployment Image Servicing and Management tool" }, { 1796, L"=== Adding Apps . . ." },
+            { 1974, L"Deployment Image Servicing and Management tool" }, { 2087, L"=== Adding Updates . . ." }, { 2127, L"=== Adding LCU 09974-Windows11.0-KB5132061-x64.msu" }, { 2584, L"The operation completed successfully." },
+            { 2738, L"The operation completed successfully." }, { 3223, L"Unmounting image" }, { 3320, L"=== Rebuilding install.wim . . ." }, { 3345, L"=== Creating winre.wim . . ." }, { 3385, L"=== Remounting image . . ." },
+            { 3430, L"=== Adding LCU for boot.wim . . ." }, { 3670, L"=== Adding winre.wim to install.wim . . ." }, { 3680, L"=== Creating ISO . . ." } };
+        {
+            DlProg p; ULONGLONG c = 1000000, end = c + 3709000, moved = c; int last = 0, k = 0;
+            dlpBegin(&p, 2, 0, 48, 1, c - 320000); dlpStep(&p, 3, c);
+            for (ULONGLONG n = c; n < end; n += 10000) {
+                for (; k < (int)(sizeof(RUN2) / sizeof(RUN2[0])) && c + RUN2[k].at * 1000ULL <= n; k++) dlpLine(&p, RUN2[k].s, c + RUN2[k].at * 1000ULL);
+                double left = dlpLeft(&p, n), real = (end - n) / 1000.0; int pct = dlpPercent(&p, n); wchar_t x[160];
+                if (pct < last || fabs(left - real) > 600) ok1 = FALSE;
+                if (pct > last) moved = n;
+                if (n - moved > 150000) ok1 = FALSE;                         // it never sits still for more than 2.5 minutes
+                last = pct; dlpText(&p, n, x, 160);
+                if ((n - c) % 60000 == 0) wprintf(L"  both %s  (really %.1f min)\n", x, real / 60);
+            }
+        }
+        wprintf(L"download progress, one edition: %s\n", ok1 ? L"PASS" : L"FAIL");
         BOOL ok = TRUE;
         for (int slow = 1; slow <= 3; slow++) {                     // the same PC, then ones two and three times slower
             DlProg p; ULONGLONG t = 1000000;
-            dlpBegin(&p, 2, 0, 1, t);
+            dlpBegin(&p, 2, 0, 22, 1, t);
             dlpStep(&p, 1, t); dlpStep(&p, 2, t + 20000);
             for (int s = 0; s <= 600; s++) dlpBytes(&p, 16000000ULL * s, 9600000000ULL, t + 40000 + s * 1000ULL);
             ULONGLONG c = t + 640000, end = c + 2685000ULL * slow; int last = 0, k = 0;
@@ -159,7 +204,7 @@ int wmain(void) {
             if (!p.sawLcu || !p.inTail) ok = FALSE;
         }
         // a report cut in two by the pipe isn't shown as text, and counts
-        repairClear(); dlpBegin(&g_dlp, 1, 0, 1, GetTickCount64());
+        repairClear(); dlpBegin(&g_dlp, 1, 0, 22, 1, GetTickCount64());
         wchar_t m1[] = { 'a', REP_PROG_MARK, '1', '2' }, m2[] = { '/', '5', '0', REP_PROG_END, 'b' };
         repairFeed(m1, 4); repairFeed(m2, 5);
         if (g_repN != 1 || wcscmp(g_repLines[0].s, L"ab") || g_dlp.got != 12 || g_dlp.total != 50) ok = FALSE;
@@ -184,7 +229,6 @@ int wmain(void) {
         cmdOk = cmdOk && noPrompt && splitOk;
 
         // a bare carriage return redraws the line; CRLF and CR CR LF end it, even split across reads
-        InitializeCriticalSection(&g_lock);
         repairClear();
         repairFeed(L"one\r\ntwo 10%\rtwo 20%\r", 21);
         repairFeed(L"\nthr\r\r\nfour", 11);
@@ -323,6 +367,14 @@ int wmain(void) {
                         && !dlSpecParse(L"abc|en-us|PRO||C:\\D|", &sp)                          // the apps part can't be missing
                         && !dlSpecParse(L"abc|en-us|PRO||C:\\D||a\r\nb", &sp)                   // nor carry another line into the list
                         && !dlSpecParse(L"abc|en-us|PRO||C:\\D||a|b", &sp);
+        // the chosen work folder: optional, a full path on a drive letter, nothing that climbs out or carries options
+        specOk = specOk && dlSpecParse(L"abc|en-us|PRO||C:\\D||-|D:\\Builds", &sp) && !wcscmp(sp.work, L"D:\\Builds")
+                        && dlSpecParse(L"abc|en-us|PRO||C:\\D||-|", &sp) && !sp.work[0]
+                        && dlSpecParse(L"abc|en-us|PRO||C:\\D||-", &sp) && !sp.work[0]
+                        && !dlSpecParse(L"abc|en-us|PRO||C:\\D||-|\\\\srv\\share", &sp)
+                        && !dlSpecParse(L"abc|en-us|PRO||C:\\D||-|D:\\a\\..\\b", &sp)
+                        && !dlSpecParse(L"abc|en-us|PRO||C:\\D||-|D:\\a\" /x", &sp)
+                        && !dlSpecParse(L"abc|en-us|PRO||C:\\D||-|D:\\a|x", &sp);
 
         // the apps an edition's metadata lists: only the PreinstalledApps group, once each, with names people know
         const char* cdb = "<Features>"
@@ -373,20 +425,29 @@ int wmain(void) {
         const wchar_t* conv1 = L"26300.9818.261025-0959.26H2_GE_RELEASE_SVC_PROD3_CLIENTMULTI_X64FRE_EN-US.ISO";
         wcscpy(ff.title, L"Windows 11, version 26H2 (26300.9818)"); wcscpy(ff.build, L"26300.9818"); wcscpy(ff.ring, L"RP"); ff.created = 1793206836;
         wcscpy(ff.arch, L"arm64");
-        dlIsoName(&ff, conv1, isoN, MAX_PATH);
+        dlIsoName(&ff, conv1, L"", L"", isoN, MAX_PATH);
         BOOL isoOk = !wcscmp(isoN, L"26300.9818_26H2_arm64_Release Preview_28_Oct_26.iso");
         wcscpy(ff.arch, L"amd64");
-        dlIsoName(&ff, conv1, isoN, MAX_PATH);
+        dlIsoName(&ff, conv1, L"", L"", isoN, MAX_PATH);
         isoOk = isoOk && !wcscmp(isoN, L"26300.9818_26H2_x64_Release Preview_28_Oct_26.iso");
+        // the editions after the version, in the user's fixed order whatever the tick order, Pro only when ticked
+        dlIsoName(&ff, conv1, L"PROFESSIONAL;CORE", L"ProfessionalWorkstation,Education,Enterprise,ProfessionalEducation", isoN, MAX_PATH);
+        isoOk = isoOk && !wcscmp(isoN, L"26300.9818_26H2_home.pro.edu.ent.pro-edu.pro-work_x64_Release Preview_28_Oct_26.iso");
+        dlIsoName(&ff, conv1, L"PROFESSIONAL", L"", isoN, MAX_PATH);
+        isoOk = isoOk && !wcscmp(isoN, L"26300.9818_26H2_pro_x64_Release Preview_28_Oct_26.iso");
+        dlIsoName(&ff, conv1, L"", L"Enterprise", isoN, MAX_PATH);
+        isoOk = isoOk && !wcscmp(isoN, L"26300.9818_26H2_ent_x64_Release Preview_28_Oct_26.iso");
+        dlIsoName(&ff, conv1, L"CORE;PPIPRO", L"", isoN, MAX_PATH);
+        isoOk = isoOk && !wcscmp(isoN, L"26300.9818_26H2_home.ppipro_x64_Release Preview_28_Oct_26.iso");
         wcscpy(ff.title, L"Windows 11 Insider Preview 26100.1 (ge_release)"); wcscpy(ff.build, L"26100.1"); wcscpy(ff.ring, L"CANARY"); ff.created = 1712163614;
-        dlIsoName(&ff, L"26100.1.240331-1435.GE_RELEASE_CLIENTMULTI_X64FRE_EN-US.ISO", isoN, MAX_PATH);
+        dlIsoName(&ff, L"26100.1.240331-1435.GE_RELEASE_CLIENTMULTI_X64FRE_EN-US.ISO", L"", L"", isoN, MAX_PATH);
         isoOk = isoOk && !wcscmp(isoN, L"26100.1_GE_x64_Canary_03_Apr_24.iso");
-        wcscpy(ff.ring, L"WIS"); dlIsoName(&ff, L"x", isoN, MAX_PATH);  isoOk = isoOk && wcsstr(isoN, L"_x64_Beta_");
-        wcscpy(ff.ring, L"WIF"); dlIsoName(&ff, L"x", isoN, MAX_PATH);  isoOk = isoOk && wcsstr(isoN, L"_x64_Dev_");
-        wcscpy(ff.ring, L"RETAIL"); dlIsoName(&ff, L"x", isoN, MAX_PATH); isoOk = isoOk && wcsstr(isoN, L"_x64_Retail_");
-        wcscpy(ff.ring, L"NEW/RING"); dlIsoName(&ff, L"x", isoN, MAX_PATH); isoOk = isoOk && wcsstr(isoN, L"_x64_NEW-RING_");   // a new ring still names safely
+        wcscpy(ff.ring, L"WIS"); dlIsoName(&ff, L"x", L"", L"", isoN, MAX_PATH);  isoOk = isoOk && wcsstr(isoN, L"_x64_Beta_");
+        wcscpy(ff.ring, L"WIF"); dlIsoName(&ff, L"x", L"", L"", isoN, MAX_PATH);  isoOk = isoOk && wcsstr(isoN, L"_x64_Dev_");
+        wcscpy(ff.ring, L"RETAIL"); dlIsoName(&ff, L"x", L"", L"", isoN, MAX_PATH); isoOk = isoOk && wcsstr(isoN, L"_x64_Retail_");
+        wcscpy(ff.ring, L"NEW/RING"); dlIsoName(&ff, L"x", L"", L"", isoN, MAX_PATH); isoOk = isoOk && wcsstr(isoN, L"_x64_NEW-RING_");   // a new ring still names safely
         memset(&ff, 0, sizeof(ff));
-        dlIsoName(&ff, conv1, isoN, MAX_PATH);
+        dlIsoName(&ff, conv1, L"", L"", isoN, MAX_PATH);
         isoOk = isoOk && !wcscmp(isoN, conv1);                                                                               // no facts: keep the converter's name
 
         // N editions go, whatever else is listed; a code ending in N with no base edition beside it stays

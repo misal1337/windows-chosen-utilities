@@ -1,4 +1,4 @@
-# Windows Chosen Utilities v1.10
+# Windows Chosen Utilities v1.11
 
 [![Download](https://img.shields.io/badge/Download-exe-0078D4?style=for-the-badge)](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 [![Latest release](https://img.shields.io/github/v/release/misal1337/windows-chosen-utilities?style=for-the-badge&label=version)](https://github.com/misal1337/windows-chosen-utilities/releases)
@@ -52,7 +52,7 @@ and run it. Nothing is installed.
 - **Misc Tweaks**: Terminal settings restore, plus Enable/Disable switches for Explore Background, Gallery, VBS,
   RDP blank password, map drives delay, WU drivers, notifications, Windows theme, and Timezone and Region.
 - **Download Windows**: builds a bootable x64 or Arm64 ISO from Microsoft's files via UUP dump, with the
-  editions, language and preinstalled apps you choose.
+  editions, language and preinstalled apps you choose, in Documents or a work folder you pick.
 - **Install Apps**: silent installs and updates of Firefox, IDM, PotPlayer, Chrome Remote Desktop, NanaZip and
   Tailscale, with signature checks and tidy Start menu shortcuts.
 - **MS Office 365**: downloads Microsoft 365 Apps (x64) from the Office CDN, installs the apps you pick, and
@@ -155,3 +155,18 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
 - Download Windows: a progress bar, the elapsed time and an estimate of the time left for the whole job. The estimate
   learns this PC's conversion speed after the first build.
 - Version numbers now run to x.19 before the next whole number.
+
+**26 Nov 2026: v1.11**
+- Download Windows: the bar no longer stands still near 80%. The longest stage is now followed in four parts, and the
+  apps stage in two.
+- The full bar and the time taken stay on the page after the job, until the next one. A cancelled or failed job shows
+  how long it ran.
+- The log ends with the time taken: the whole job, the download and the conversion.
+- Download Windows: a Work folder choice, for PCs short of space on C:. The default is still Documents. It shows
+  the free space on that drive, and the work files are deleted after every build, as before.
+- Download Windows: the ISO's name now lists its editions after the version, such as
+  `26300.10075_26H2_home.pro_x64_Release Preview_19_Nov_26.iso`.
+- Download Windows: the build number, x64/arm64 and Find share one row, so the output panel is taller.
+- Install Apps: IDM's Update button uses IDM's own update (idmupdt.exe) and runs without a prompt; when IDM is
+  installed, its button reads Reinstall IDM and runs the full setup.
+- Install Apps: NanaZip also opens 7Z files, and Update buttons no longer ask for confirmation.

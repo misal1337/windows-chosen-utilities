@@ -234,28 +234,47 @@ static BOOL dlOwnedByAdmins(HANDLE h) {
     return ok;
 }
 
-// The places a work folder can be: [0] <Documents>\WCU_UUP, and [1] <system drive>\WCU_UUP, the fallback the user
-// chose for when Documents can't be used (a drive that isn't NTFS, a network folder, or a path with spaces on a
-// drive without short names). An empty string if Documents can't be found. Cleanup looks in both.
-#define DL_NPLACES 2
+// The folder the user chose for the work files (the Work folder row), or empty for the default. The window keeps it
+// in the registry and sends it with each request; the helper sets it from the request.
+#define DL_WORK_VALUE L"UupWorkFolder"
+static wchar_t g_dlWorkBase[MAX_PATH];
+
+// The places a work folder can be: [0] <chosen folder>\WCU_UUP, empty when none is chosen; [1] <Documents>\WCU_UUP,
+// the default; and [2] <system drive>\WCU_UUP, the fallback the user chose for when Documents can't be used (a drive
+// that isn't NTFS, a network folder, or a path with spaces on a drive without short names). An empty string for a
+// place that can't be found. Cleanup looks in all of them.
+#define DL_NPLACES 3
 static void dlWorkPlaces(wchar_t places[DL_NPLACES][MAX_PATH + 16]) {
     wchar_t docs[MAX_PATH], sys[8] = L"C:";
-    places[0][0] = 0;
-    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docs))) swprintf(places[0], MAX_PATH + 16, L"%s\\WCU_UUP", docs);
+    places[0][0] = places[1][0] = 0;
+    if (g_dlWorkBase[0]) {
+        size_t n = wcslen(g_dlWorkBase);
+        swprintf(places[0], MAX_PATH + 16, L"%s%sWCU_UUP", g_dlWorkBase, n && g_dlWorkBase[n - 1] == L'\\' ? L"" : L"\\");
+    }
+    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docs))) swprintf(places[1], MAX_PATH + 16, L"%s\\WCU_UUP", docs);
     GetEnvironmentVariableW(L"SystemDrive", sys, 8);
-    swprintf(places[1], MAX_PATH + 16, L"%s\\WCU_UUP", sys);
+    swprintf(places[2], MAX_PATH + 16, L"%s\\WCU_UUP", sys);
+}
+
+// A chosen work folder as the request may carry it: empty, or a full path on a drive letter, nothing odd in it
+static BOOL dlWorkBaseOk(const wchar_t* p) {
+    if (!p[0]) return TRUE;
+    if (wcslen(p) > MAX_PATH - 20 || !iswalpha(p[0]) || p[1] != L':' || p[2] != L'\\') return FALSE;
+    if (wcspbrk(p, L"\"|<>*?/\r\n") || wcschr(p + 2, L':') || wcsstr(p, L"\\..")) return FALSE;
+    return TRUE;
 }
 
 static BOOL dlRootInUse(const wchar_t* path);
 
-// Why Documents can't hold the work folder, or NULL if it can: DISM mounts the image there and the folder is made
-// administrators-only, which needs NTFS on a local drive
+// Why Documents (or the chosen folder) can't hold the work folder, or NULL if it can: DISM mounts the image there and
+// the folder is made administrators-only, which needs NTFS on a local drive
 static const wchar_t* dlDocsUnusable(const wchar_t* path) {
     if (!path[0]) return L"Windows didn't say where Documents is";
-    if (!wcsncmp(path, L"\\\\", 2)) return L"Documents is a network folder";
+    if (!wcsncmp(path, L"\\\\", 2)) return L"it's a network folder";
     wchar_t vol[MAX_PATH], fs[32] = L"";
     if (!GetVolumePathNameW(path, vol, MAX_PATH)) return L"its drive couldn't be read";
-    if (GetDriveTypeW(vol) == DRIVE_REMOTE) return L"Documents is on a network drive";
+    if (GetDriveTypeW(vol) == DRIVE_REMOTE) return L"it's on a network drive";
+    if (GetDriveTypeW(vol) == DRIVE_CDROM) return L"it's on a CD/DVD drive";
     if (!GetVolumeInformationW(vol, NULL, 0, NULL, NULL, NULL, fs, 32)) return L"its drive couldn't be read";
     if (_wcsicmp(fs, L"NTFS")) return L"its drive isn't NTFS";
     return NULL;
@@ -297,7 +316,8 @@ static DWORD dlRootTry(const wchar_t* path, const wchar_t** why) {
     return 0;
 }
 
-// Documents first. The system drive's root only when Documents can't be found or a build can't work there.
+// The chosen folder if there is one, with no fallback (it was chosen, often for its free space). Otherwise Documents
+// first, and the system drive's root only when Documents can't be found or a build can't work there.
 static DWORD dlRootEnsure(HANDLE out) {
     wchar_t places[DL_NPLACES][MAX_PATH + 16], line[MAX_PATH * 2 + 300];
     g_dlRoot[0] = 0;
@@ -308,17 +328,30 @@ static DWORD dlRootEnsure(HANDLE out) {
         repWrite(out, line);
         return ERROR_BUSY;
     }
-    const wchar_t* why = dlDocsUnusable(places[0]);
+    const wchar_t* why;
     DWORD e = ERROR_PATH_NOT_FOUND;
+    if (places[0][0]) {
+        if (GetFileAttributesW(g_dlWorkBase) == INVALID_FILE_ATTRIBUTES) why = L"the folder isn't there any more";
+        else if (!(why = dlDocsUnusable(places[0]))) e = dlRootTry(places[0], &why);
+        if (!e) {
+            swprintf(line, MAX_PATH * 2 + 300, L"Work files go in %s\r\n", places[0]);
+            repWrite(out, line);
+            return 0;
+        }
+        swprintf(line, MAX_PATH * 2 + 300, L"Error: the work folder %s can't be used: %s. Choose another one under Work folder.\r\n", g_dlWorkBase, why);
+        repWrite(out, line);
+        return e;
+    }
+    why = dlDocsUnusable(places[1]);
     if (!why) {
-        e = dlRootTry(places[0], &why);
+        e = dlRootTry(places[1], &why);
         if (!e) return 0;
     }
-    swprintf(line, MAX_PATH * 2 + 300, L"Documents can't be used for the work files (%s), so they go in %s.\r\n", why, places[1]);
+    swprintf(line, MAX_PATH * 2 + 300, L"Documents can't be used for the work files (%s), so they go in %s.\r\n", why, places[2]);
     repWrite(out, line);
-    e = dlRootTry(places[1], &why);
+    e = dlRootTry(places[2], &why);
     if (e) {
-        swprintf(line, MAX_PATH * 2 + 300, L"Error: %s can't be used either: %s.\r\n", places[1], why);
+        swprintf(line, MAX_PATH * 2 + 300, L"Error: %s can't be used either: %s.\r\n", places[2], why);
         repWrite(out, line);
     }
     return e;
@@ -760,7 +793,7 @@ static int dlReadBuildApps(const wchar_t* uuid, const wchar_t* lang, const wchar
 // checks it, because it arrives on an elevated command line. apps: empty for every app the build has, "-" for none,
 // or the IDs of the ticked ones separated by commas.
 #define DL_APPS_CCH 6000
-typedef struct { wchar_t uuid[48], lang[20], editions[400], virt[300], desktop[MAX_PATH], cancel[64], apps[DL_APPS_CCH]; } DlSpec;
+typedef struct { wchar_t uuid[48], lang[20], editions[400], virt[300], desktop[MAX_PATH], cancel[64], apps[DL_APPS_CCH], work[MAX_PATH]; } DlSpec;
 
 // ---------- the job: the converter's settings ----------
 typedef struct { const char* key; char value[300]; BOOL found; } DlIniSet;
@@ -1045,21 +1078,22 @@ static BOOL dlOnly(const wchar_t* s, const wchar_t* allowedPunct, BOOL alnum) {
 }
 static BOOL dlSpecParse(const wchar_t* text, DlSpec* s) {
     memset(s, 0, sizeof(*s));
-    struct { wchar_t* to; int cch; } parts[7] = {
+    // the 8th part, the chosen work folder, may be left out
+    struct { wchar_t* to; int cch; } parts[8] = {
         { s->uuid, 48 }, { s->lang, 20 }, { s->editions, 400 }, { s->virt, 300 }, { s->desktop, MAX_PATH }, { s->cancel, 64 },
-        { s->apps, DL_APPS_CCH } };
+        { s->apps, DL_APPS_CCH }, { s->work, MAX_PATH } };
     const wchar_t* p = text;
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8 && p; i++) {
         const wchar_t* e = wcschr(p, L'|');
         size_t n = e ? (size_t)(e - p) : wcslen(p);
-        if ((int)n >= parts[i].cch || (i < 6 && !e) || (i == 6 && e)) return FALSE;
+        if ((int)n >= parts[i].cch || (i < 6 && !e) || (i == 7 && e)) return FALSE;
         wmemcpy(parts[i].to, p, n); parts[i].to[n] = 0;
-        if (e) p = e + 1;
+        p = e ? e + 1 : NULL;
     }
     return s->uuid[0] && dlOnly(s->uuid, L"-", TRUE) && s->lang[0] && dlOnly(s->lang, L"-", TRUE)
         && (s->editions[0] || s->virt[0]) && dlOnly(s->editions, L";_", TRUE) && dlOnly(s->virt, L",", TRUE)
         && s->desktop[0] && !wcspbrk(s->desktop, L"\"|<>*?") && dlOnly(s->cancel, L"\\-_", TRUE)
-        && dlOnly(s->apps, L"._-,", TRUE);
+        && dlOnly(s->apps, L"._-,", TRUE) && dlWorkBaseOk(s->work);
 }
 
 static void dlShowErrorLogs(const wchar_t* conv, HANDLE out) {
@@ -1157,15 +1191,47 @@ static void dlVersionToken(const wchar_t* title, const wchar_t* isoName, wchar_t
     out[n] = 0;
 }
 
-// <build>_<version>_<x64 or Arm64>_<channel>_<DD>_<Mon>_<YY>.iso. Parts nobody could tell us are left out, and with no build number
-// to go on the converter's own name is kept.
-static void dlIsoName(const DlFacts* f, const wchar_t* isoName, wchar_t* out, int cch) {
+// The editions in the ISO, short and joined by dots, always in this order: home.pro.edu.ent.pro-edu.pro-work (the
+// user's names). Pro is in it only when ticked: when it's only downloaded to make the others, it's left out of the
+// ISO. An edition not in the list (one UUP dump adds later) comes after them, in lower case.
+static void dlEditionsToken(const wchar_t* editions, const wchar_t* virt, wchar_t* out, int cch) {
+    static const struct { const wchar_t* code; const wchar_t* tag; } ORDER[] = {
+        { L"CORE", L"home" }, { L"PROFESSIONAL", L"pro" }, { L"Education", L"edu" }, { L"Enterprise", L"ent" },
+        { L"ProfessionalEducation", L"pro-edu" }, { L"ProfessionalWorkstation", L"pro-work" } };
+    out[0] = 0;
+    wchar_t list[720], *ctx = NULL;
+    swprintf(list, 720, L"%s;%s", editions, virt);
+    for (size_t i = 0; i < sizeof(ORDER) / sizeof(ORDER[0]); i++) {
+        wchar_t tmp[720]; wcscpy(tmp, list);
+        for (wchar_t* e = wcstok(tmp, L";,", &ctx); e; e = wcstok(NULL, L";,", &ctx))
+            if (!_wcsicmp(e, ORDER[i].code)) {
+                if (out[0]) wcsncat(out, L".", cch - wcslen(out) - 1);
+                wcsncat(out, ORDER[i].tag, cch - wcslen(out) - 1);
+                break;
+            }
+    }
+    for (wchar_t* e = wcstok(list, L";,", &ctx); e; e = wcstok(NULL, L";,", &ctx)) {
+        BOOL known = FALSE;
+        for (size_t i = 0; i < sizeof(ORDER) / sizeof(ORDER[0]); i++) if (!_wcsicmp(e, ORDER[i].code)) known = TRUE;
+        if (known) continue;
+        if (out[0]) wcsncat(out, L".", cch - wcslen(out) - 1);
+        size_t at = wcslen(out);
+        wcsncat(out, e, cch - at - 1);
+        for (wchar_t* c = out + at; *c; c++) *c = towlower(*c);
+    }
+}
+
+// <build>_<version>_<editions>_<x64 or Arm64>_<channel>_<DD>_<Mon>_<YY>.iso. Parts nobody could tell us are left out, and with
+// no build number to go on the converter's own name is kept.
+static void dlIsoName(const DlFacts* f, const wchar_t* isoName, const wchar_t* editions, const wchar_t* virt, wchar_t* out, int cch) {
     static const wchar_t* MONTHS[] = { L"Jan", L"Feb", L"Mar", L"Apr", L"May", L"Jun", L"Jul", L"Aug", L"Sep", L"Oct", L"Nov", L"Dec" };
     if (!f->build[0]) { lstrcpynW(out, isoName, cch); return; }
-    wchar_t ver[32], part[64];
+    wchar_t ver[32], part[200], eds[160];
     dlVersionToken(f->title, isoName, ver, 32);
+    dlEditionsToken(editions, virt, eds, 160);
     swprintf(out, cch, L"%s", f->build);
     if (ver[0]) { swprintf(part, 64, L"_%s", ver); wcsncat(out, part, cch - wcslen(out) - 1); }
+    if (eds[0]) { swprintf(part, 200, L"_%s", eds); wcsncat(out, part, cch - wcslen(out) - 1); }
     if (f->arch[0]) { swprintf(part, 64, L"_%s", dlArchLabel(f->arch)); wcsncat(out, part, cch - wcslen(out) - 1); }
     if (f->ring[0]) { swprintf(part, 64, L"_%s", dlChannelName(f->ring)); wcsncat(out, part, cch - wcslen(out) - 1); }
     if (f->created > 0) {
@@ -1193,7 +1259,8 @@ static BOOL dlCheckSpace(const wchar_t* root, const wchar_t* desktop, unsigned l
     ULARGE_INTEGER freeB;
     if (GetDiskFreeSpaceExW(rootSlash, &freeB, NULL, NULL) && freeB.QuadPart < need) {
         fmtSize(need, nd, 48); fmtSize(freeB.QuadPart, fr, 48);
-        swprintf(line, 600, L"Error: this needs about %s free on the drive with the work folder (%c:), and it has %s.\r\n", nd, root[0], fr);
+        swprintf(line, 600, L"Error: this needs about %s free on the drive with the work folder (%c:), and it has %s. "
+                 L"Choose a folder on a drive with more room under Work folder.\r\n", nd, root[0], fr);
         repWrite(out, line);
         return FALSE;
     }
@@ -1480,9 +1547,15 @@ static DWORD dlDownloadAll(const DlSpec* s, const wchar_t* edAll, DlFile* files,
 }
 
 static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
-    if (!wcscmp(specText, L"cleanup")) return dlCleanUpAll(out);
+    if (!wcsncmp(specText, L"cleanup", 7) && (!specText[7] || specText[7] == L'|')) {     // "cleanup" or "cleanup|<work folder>"
+        const wchar_t* w = specText[7] ? specText + 8 : L"";
+        if (wcslen(w) >= MAX_PATH || !dlWorkBaseOk(w)) { repWrite(out, L"Error: the request wasn't valid. Nothing was run.\r\n"); return 1; }
+        lstrcpynW(g_dlWorkBase, w, MAX_PATH);
+        return dlCleanUpAll(out);
+    }
     static DlSpec s; wchar_t line[600], conv[MAX_PATH] = L"";
     if (!dlSpecParse(specText, &s)) { repWrite(out, L"Error: the request wasn't valid. Nothing was run.\r\n"); return 1; }
+    lstrcpynW(g_dlWorkBase, s.work, MAX_PATH);
     // The converter runs its helpers by bare name from the folder it's in. With this setting on, cmd won't look there,
     // and the converter just carries on, leaving out the apps and the extra editions. So its tools never inherit it.
     SetEnvironmentVariableW(L"NoDefaultCurrentDirectoryInExePath", NULL);
@@ -1493,6 +1566,8 @@ static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
     DlFile* files = NULL;
     BOOL converting = FALSE;
 #define DL_STOPPED() (WaitForSingleObject(cancel, 0) == WAIT_OBJECT_0)
+
+    g_dlpT0 = GetTickCount64(); g_dlpTDown = g_dlpTConv = 0;
 
     // ---- UUP dump's tools ----
     dlStep(out, L"Getting UUP dump's tools");
@@ -1515,6 +1590,7 @@ static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
 
     // ---- the download ----
     dlStep(out, L"Downloading Windows from Microsoft");
+    g_dlpTDown = GetTickCount64();
     DlFacts facts;
     dlReadFacts(s.uuid, &facts);       // asked now, so a dropped connection an hour from now can't cost the ISO its name
     files = (DlFile*)malloc(sizeof(DlFile) * DL_MAX_FILES);
@@ -1602,6 +1678,7 @@ static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
 
     // ---- the conversion ----
     dlStep(out, L"Converting the files to an ISO");
+    g_dlpTConv = GetTickCount64();
     if (!dlWriteConverterConfig(conv, s.virt, s.apps, dropPro, out)) goto done;
     if (!dlPatchConverterPaths(conv, root, dropPro, out)) goto done;
     dlDeleteIsos(conv);
@@ -1621,7 +1698,7 @@ static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
     }
     BOOL allEditions = dlCheckEditions(conv, iso, &s, wantApps, dropPro, cancel, out);
     wchar_t finalPath[MAX_PATH * 2], saveName[MAX_PATH];
-    dlIsoName(&facts, iso, saveName, MAX_PATH);
+    dlIsoName(&facts, iso, s.editions, s.virt, saveName, MAX_PATH);
     if (!dlDeliverIso(conv, iso, saveName, s.desktop, finalPath, MAX_PATH * 2)) {
         DWORD me = GetLastError();
         if (me == ERROR_DISK_FULL || me == ERROR_HANDLE_DISK_FULL)     // something else filled it during the build
@@ -1637,6 +1714,7 @@ static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
         goto done;
     }
     dlRootRemove(out);          // before the last line, which the window reads as the end
+    dlpWriteTimes(out, L"Time taken");
     swprintf(line, 600, L"\r\n" DL_SAVED_PREFIX L"%s\r\n", finalPath);
     repWrite(out, line);
     result = 0;
@@ -1648,6 +1726,7 @@ stopped:
 done:
     if (converting && result != 0) dlCleanUpAfterStop(conv, out);   // a stopped converter can leave an image mounted
     dlRootRemove(out);
+    if (result != 0) dlpWriteTimes(out, L"Stopped after");
     free(files);
     CloseHandle(cancel);
     return result;
@@ -2026,13 +2105,15 @@ static BOOL dlAnyEdition(void) {
     return FALSE;
 }
 
+static void dlWorkLabel(wchar_t* path, int cchPath, wchar_t* freeTx, int cchFree);
 static void dlStart(void) {
     if (!g_dlHas || !dlAnyEdition() || g_busy) return;
     if (askInApp()) {
-        wchar_t msg[700], appsTx[80];
+        wchar_t msg[1200], appsTx[80], wp[MAX_PATH], wf[80];
         dlAppsLabel(appsTx, 80);
-        swprintf(msg, 700, L"%s\n\nArchitecture: %s\nLanguage: %s\nApps: %s\n\nThis downloads several GB from Microsoft and can take over an hour. The ISO is saved to your Desktop.",
-                 g_dlCur.title, DL_ARCHES[g_dlArch].label, g_dlLangName, appsTx);
+        dlWorkLabel(wp, MAX_PATH, wf, 80);
+        swprintf(msg, 1200, L"%s\n\nArchitecture: %s\nLanguage: %s\nApps: %s\nWork folder: %s\n\nThis downloads several GB from Microsoft and can take over an hour. The ISO is saved to your Desktop.",
+                 g_dlCur.title, DL_ARCHES[g_dlArch].label, g_dlLangName, appsTx, wp);
         if (!showDialog(g_hwnd, L"Download and build this ISO?", msg, NULL, 0, L"Start", L"Cancel", 1)) return;
     }
     wchar_t eds[400] = L"", virt[300] = L"", desktop[MAX_PATH] = L"", evName[64], spec[REP_ARG_MAX];
@@ -2057,14 +2138,17 @@ static void dlStart(void) {
     g_dlCancelEv = CreateEventW(NULL, TRUE, FALSE, evName);
     static wchar_t apps[DL_APPS_CCH];
     dlAppsSpec(apps, DL_APPS_CCH);
-    swprintf(spec, REP_ARG_MAX, L"%s|%s|%s|%s|%s|%s|%s", g_dlCur.uuid, g_dlLangCode, eds, virt, desktop, g_dlCancelEv ? evName : L"", apps);
+    swprintf(spec, REP_ARG_MAX, L"%s|%s|%s|%s|%s|%s|%s|%s", g_dlCur.uuid, g_dlLangCode, eds, virt, desktop, g_dlCancelEv ? evName : L"", apps, g_dlWorkBase);
     g_repShow = TRUE;
     int nImg = 0, nVirt = 0; BOOL pro = FALSE;
     for (int i = 0; i < g_dlEdN; i++) if (g_dlEd[i].checked) { nImg++; if (!_wcsicmp(g_dlEd[i].code, L"PROFESSIONAL")) pro = TRUE; }
     for (int i = 0; i < DL_NVIRTUAL; i++) if (g_dlVirt[i]) nVirt++;
     double pace = dlpLoadPace();
     EnterCriticalSection(&g_lock);
-    dlpBegin(&g_dlp, nImg + (nVirt && !pro), nVirt, pace, GetTickCount64());   // before the job: its first words come at once
+    int nApps = 0;
+    for (int i = 0; i < g_dlAppN; i++) if (g_dlApps[i].checked || g_dlApps[i].fixed) nApps++;
+    if (g_dlAppsState != 1) nApps = g_dlAppsState == 2 ? 0 : DLP_ALLAPPS;
+    dlpBegin(&g_dlp, nImg + (nVirt && !pro), nVirt, nApps, pace, GetTickCount64());   // before the job: its first words come at once
     LeaveCriticalSection(&g_lock);
     repairStart(REP_UUP, spec);
     if (!g_repRunning) { dlpHide(); return; }
@@ -2118,6 +2202,66 @@ static void dlOnJobSucceeded(void) {
     noteShow(PAGE_DOWNLOAD);
 }
 
+// ---------- the Work folder row ----------
+// Where the download and the conversion's files go (about 5 times the download, 40-60 GB): Documents by default.
+// A folder chosen here is kept in the registry for the next runs.
+static BOOL g_dlWorkLoaded = FALSE;
+static void dlWorkLoad(void) {
+    if (g_dlWorkLoaded) return;
+    g_dlWorkLoaded = TRUE;
+    wchar_t v[MAX_PATH] = L""; DWORD cb = sizeof(v);
+    if (RegGetValueW(HKEY_CURRENT_USER, LANG_KEY, DL_WORK_VALUE, RRF_RT_REG_SZ, NULL, v, &cb) == ERROR_SUCCESS && dlWorkBaseOk(v))
+        lstrcpynW(g_dlWorkBase, v, MAX_PATH);
+}
+
+// What the row shows: the folder, and the free space on its drive
+static void dlWorkLabel(wchar_t* path, int cchPath, wchar_t* freeTx, int cchFree) {
+    wchar_t docs[MAX_PATH] = L"", vol[MAX_PATH], fr[48];
+    const wchar_t* at = g_dlWorkBase;
+    if (!at[0]) {
+        SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docs);
+        at = docs;
+        swprintf(path, cchPath, L"Documents");
+    } else lstrcpynW(path, at, cchPath);
+    freeTx[0] = 0;
+    ULARGE_INTEGER freeB;
+    if (at[0] && GetVolumePathNameW(at, vol, MAX_PATH) && GetDiskFreeSpaceExW(vol, &freeB, NULL, NULL)) {
+        fmtSize(freeB.QuadPart, fr, 48);
+        swprintf(freeTx, cchFree, L"%s free", fr);
+    }
+}
+
+static void dlWorkSave(void) {
+    if (g_dlWorkBase[0]) RegSetKeyValueW(HKEY_CURRENT_USER, LANG_KEY, DL_WORK_VALUE, REG_SZ, g_dlWorkBase, (DWORD)((wcslen(g_dlWorkBase) + 1) * sizeof(wchar_t)));
+    else RegDeleteKeyValueW(HKEY_CURRENT_USER, LANG_KEY, DL_WORK_VALUE);
+}
+
+static void dlPickWork(void) {
+    wchar_t p[MAX_PATH] = L"", docs[MAX_PATH] = L"", sp[MAX_PATH];
+    if (!pickFolder(p)) return;
+    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docs)) && !_wcsicmp(p, docs)) {   // Documents is the default
+        g_dlWorkBase[0] = 0;
+        dlWorkSave();
+        InvalidateRect(g_hwnd, NULL, FALSE);
+        return;
+    }
+    const wchar_t* why = NULL;
+    if (!dlWorkBaseOk(p)) why = L"Choose a folder on a drive of this PC (with a drive letter).";
+    else if (dlDocsUnusable(p)) why = L"Choose a folder on an NTFS drive of this PC. Network folders, CD/DVD drives and drives such as FAT32 or exFAT USB sticks can't hold a Windows image while it's being built.";
+    else if (!GetShortPathNameW(p, sp, MAX_PATH) || !dlPathSimple(sp))
+        why = L"UUP dump's converter needs a path without spaces, and this drive doesn't give folders short names. Choose a folder whose path has no spaces.";
+    if (why) { okDialog(L"This folder can't be used", why); return; }
+    lstrcpynW(g_dlWorkBase, p, MAX_PATH);
+    dlWorkSave();
+    InvalidateRect(g_hwnd, NULL, FALSE);
+}
+
+static void dlWorkDefault(void) {
+    g_dlWorkBase[0] = 0;
+    dlWorkSave();
+    InvalidateRect(g_hwnd, NULL, FALSE);
+}
+
 // Clears what a build cut short can leave: a mounted image, loaded hives, unfinished downloads
 static void dlCleanPressed(void) {
     if (g_busy) return;
@@ -2127,7 +2271,9 @@ static void dlCleanPressed(void) {
             NULL, 0, L"Clean up", L"Cancel", 1)) return;
     g_repShow = TRUE;
     dlpHide();
-    repairStart(REP_UUP, L"cleanup");
+    wchar_t spec[MAX_PATH + 16];
+    swprintf(spec, MAX_PATH + 16, g_dlWorkBase[0] ? L"cleanup|%s" : L"cleanup%s", g_dlWorkBase);
+    repairStart(REP_UUP, spec);
 }
 
 static void dlCancelPressed(void) {
@@ -2147,6 +2293,8 @@ static void dlClick(int id) {
     else if (id == A_D_APPS) dlPickApps();
     else if (id == A_D_CLEAN) dlCleanPressed();
     else if (id == A_D_GO) dlStart();
+    else if (id == A_D_WORK) dlPickWork();
+    else if (id == A_D_WORKDEF) dlWorkDefault();
     else if (id >= A_D_ED0 && id <= A_D_EDLAST) {
         int i = id - A_D_ED0;
         // each tick stands alone: the extra editions are made from Pro, but the job downloads Pro for them itself
@@ -2175,9 +2323,16 @@ static void drawDownload(int cL, int cR) {
     BOOL en = (g_busy == 0);
     int x1 = cL + dp(20), x2 = cR - dp(20), gap = dp(10), bh = dp(36);
 
+    // the labels' column fits the longest label in the language shown ("Arbeitsordner")
     int labelW = dp(68), rightW = dp(220);
-    int modeH = dp(32) + dp(28);
-    int cardH = dp(82) + bh + dp(10) + modeH + dp(62) + dp(8) + bh + dp(8) + bh + dp(16);
+    {
+        static const wchar_t* LABELS[] = { L"Language", L"Apps", L"Work folder" };
+        for (int i = 0; i < 3; i++) { int w = textWidth(g_fSmall, LABELS[i]) + dp(12); if (w > labelW) labelW = w; }
+    }
+    // kept compact (no heading over the build number, tight rows) so the output panel below gets the height
+    int modeH = dp(32) + dp(26), rh = dp(34), rowGap = dp(6), edH = dp(56);
+    int cardH = dp(82) + modeH + edH + dp(4) + rh + rowGap + rh + rowGap + rh + dp(12);
+    dlWorkLoad();
     int cardB = top + cardH;
     fillRoundRect(cL, top, cR, cardB, dp(8), sf.r, sf.g, sf.b, sf.a);
     drawGlyph(g_fHeadIcon, 0xE896, cL + dp(44), top + dp(44), g_accent);
@@ -2190,24 +2345,21 @@ static void drawDownload(int cL, int cR) {
              jobOn ? L"UUP Converter is running. Do not turn off your PC" : ready ? g_dlReady : L"Builds a bootable Windows ISO on your Desktop, using UUP dump",
              t2, jobOn ? RGB(232, 72, 85) : ready ? noteGreen() : mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
-    if (jobOn || ready) dlpDraw(x1, x2, cL + dp(84) + textWidth(g_fH1, L"Download Windows") + dp(12), top);
+    dlpDraw(x1, x2, cL + dp(84) + textWidth(g_fH1, L"Download Windows") + dp(12), top);
 
-    // the heading, and the architecture: x64 or arm64, one always chosen. The buttons match Find's size and line up
-    // with its right edge.
+    // the build number, the architecture beside it (x64 or arm64, one always chosen), and Find
     int y = top + dp(82);
-    int fw = dp(88), fh = dp(32), ay = y + (bh - fh) / 2;
-    RECT hd = { x1, y, x2 - fw * 2 - gap - dp(8), y + bh };
-    drawText(g_fBodyBold, L"Known Build Number", hd, textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    aioButton(A_D_X64, x2 - fw * 2 - gap, ay, x2 - fw - gap, ay + fh, DL_ARCHES[0].label, g_dlArch == 0, en, FALSE);
-    aioButton(A_D_ARM64, x2 - fw, ay, x2, ay + fh, DL_ARCHES[1].label, g_dlArch == 1, en, FALSE);
-    y += bh + dp(10);
+    int fw = dp(72), fh = dp(32), findW = dp(88);
+    int archR = x2 - findW - dp(8);
+    aioButton(A_D_X64, archR - fw * 2 - dp(6), y, archR - fw - dp(6), y + fh, DL_ARCHES[0].label, g_dlArch == 0, en, FALSE);
+    aioButton(A_D_ARM64, archR - fw, y, archR, y + fh, DL_ARCHES[1].label, g_dlArch == 1, en, FALSE);
 
-    RECT fr = { x1, y, x2 - dp(96), y + dp(32) };
+    RECT fr = { x1, y, archR - fw * 2 - dp(6) - dp(8), y + dp(32) };
     dlWantExample();
     wchar_t hint[80] = L"Build number";                  // the example appears when the lookup is done
     if (g_dlExampleState == 2) swprintf(hint, 80, L"Build number, for example %s%s", dlExample(), g_dlExample[0] ? L" (latest Release Preview)" : L"");
     aioField(A_D_BOX, fr, g_dlBox, 32, !en, hint);
-    aioButton(A_D_FIND, x2 - dp(88), y, x2, y + dp(32), L"Find", FALSE, en && !g_dlQuery, FALSE);
+    aioButton(A_D_FIND, x2 - findW, y, x2, y + dp(32), L"Find", FALSE, en && !g_dlQuery, FALSE);
     RECT m = { x1, y + dp(36), x2, y + dp(58) };
     if (g_dlMsg[0]) drawText(g_fSmall, g_dlMsg, m, g_dlMsgErr ? RGB(232, 72, 85) : mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
     else if (g_dlHas) drawText(g_fSmall, g_dlCur.title, m, textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
@@ -2220,20 +2372,21 @@ static void drawDownload(int cL, int cR) {
     int nShown = g_dlEdN + (hasPro ? DL_NVIRTUAL : 0);
     int cols = (nShown + 1) / 2;
     if (cols < 3) cols = 3;
-    int cw = (x2 - x1) / cols, rowH = dp(28);
+    int cw = (x2 - x1) / cols, rowH = dp(26);
     if (!g_dlEdN) {
-        RECT m = { x1, y, x2, y + dp(58) };
+        RECT m = { x1, y, x2, y + edH };
         const wchar_t* tx = g_dlDetailsBusy ? L"Reading this build's editions and languages…" : L"Find a build to see its editions.";
         drawText(g_fSmall, tx, m, mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
     } else {
         for (int i = 0; i < nShown; i++) {
-            int col = i % cols, top = y + (i / cols) * dp(30);
+            int col = i % cols, top = y + (i / cols) * dp(28);
             RECT r = { x1 + cw * col, top, x1 + cw * (col + 1) - dp(4), top + rowH };
             if (i < g_dlEdN) dlDrawCheck(A_D_ED0 + i, r, g_dlEd[i].name, g_dlEd[i].checked, en);
             else dlDrawCheck(A_D_V0 + (i - g_dlEdN), r, DL_VIRTUAL[i - g_dlEdN].label, g_dlVirt[i - g_dlEdN], en);
         }
     }
-    y += dp(62) + dp(8);
+    y += edH + dp(4);
+    bh = rh;
 
     // language, the apps, and the button that starts it all. The two pickers shrink before they'd reach the
     // buttons on the right; the window's minimum width keeps them from getting too small.
@@ -2242,7 +2395,7 @@ static void drawDownload(int cL, int cR) {
     drawText(g_fSmall, L"Language", ll, mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     aioButton(A_D_LANG, pickL, y, pickR, y + bh, g_dlLangName, FALSE, en && g_dlLangN > 0, FALSE);
     aioButton(A_D_CLEAN, x2 - rightW, y, x2, y + bh, L"Clean up leftovers", FALSE, en, !g_elevated);
-    y += bh + dp(8);
+    y += bh + rowGap;
     RECT al = { x1, y, pickL, y + bh };
     drawText(g_fSmall, L"Apps", al, mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     wchar_t appsTx[80]; dlAppsLabel(appsTx, 80);
@@ -2251,6 +2404,30 @@ static void drawDownload(int cL, int cR) {
         aioButton(A_D_CANCEL, x2 - rightW, y, x2, y + bh, L"Cancel", FALSE, TRUE, FALSE);
     else
         aioButton(A_D_GO, x2 - rightW, y, x2, y + bh, L"Download and build ISO", TRUE, en && g_dlHas && !g_dlDetailsBusy && dlAnyEdition(), !g_elevated);
+    y += bh + rowGap;
+
+    // where the work files go: Documents unless another folder is chosen, with the room on its drive
+    RECT wl = { x1, y, pickL, y + bh };
+    drawText(g_fSmall, L"Work folder", wl, mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    wchar_t wp[MAX_PATH], wpShow[MAX_PATH], wf[80];
+    dlWorkLabel(wp, MAX_PATH, wf, 80);
+    lstrcpynW(wpShow, wp, MAX_PATH);
+    {   // "D:\Builds  ·  880 GB free"; a long path is shortened in the middle, so its drive and last folders stay in view
+        int room = (pickR - pickL) - dp(24);
+        wchar_t t[MAX_PATH + 100], tail[90] = L"";
+        if (wf[0]) swprintf(tail, 90, L"  ·  %s", tr(wf));
+        swprintf(t, MAX_PATH + 100, L"%s%s", tr(wp), tail);
+        size_t n = wcslen(wp);
+        if (g_dlWorkBase[0] && n > 4 && textWidth(g_fBody, t) > room) {
+            for (size_t keep = n - 4; keep > 0; keep--) {
+                swprintf(t, MAX_PATH + 100, L"%.3s…%s%s", wp, wp + n - keep, tail);
+                if (textWidth(g_fBody, t) <= room) break;
+            }
+        }
+        lstrcpynW(wpShow, t, MAX_PATH);
+    }
+    aioButton(A_D_WORK, pickL, y, pickR, y + bh, wpShow, FALSE, en, FALSE);
+    if (g_dlWorkBase[0]) aioButton(A_D_WORKDEF, x2 - rightW, y, x2, y + bh, L"Use Documents", FALSE, en, FALSE);
 
     // the conversion window: every step, what the tools print, and errors in red
     static const wchar_t* STEPS[] = { L"Getting ready…", L"Step 1 of 3: getting UUP dump's tools…", L"Step 2 of 3: downloading…", L"Step 3 of 3: converting to an ISO…" };

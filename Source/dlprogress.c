@@ -2,30 +2,42 @@
 //
 // The download is measured: the job reports bytes written against UUP dump's file sizes. The conversion can't be: the
 // converter only prints a heading as each stage starts. So each stage has a length in seconds, taken from timed builds
-// on one PC (Home and Pro, 45 minutes; five editions, 66), and this PC's pace against those is learned as the stages
-// go by. The pace is kept for the next build, so its estimate is right from the start.
-#define DLP_PREP   100.0      // until the first edition is opened
+// on one PC (Pro, 30 minutes; Home and Pro, 45; five editions, 56), and this PC's pace against those is learned as the
+// stages go by. DISM's own percentages aren't used: cleanup reaches 93% in a minute and then takes another, and saving
+// prints nothing at all for six minutes out of seven. The pace is kept for the next build, so its estimate is right from the start.
+#define DLP_PREP   130.0      // until the first edition is opened
 #define DLP_OPEN    40.0      // per edition: opening it
-#define DLP_APPS   160.0      //              Edge and the apps
+#define DLP_ADDAPPS(n)  (10 + 3.4 * (n))    //     Edge and the apps: 10 took 85 seconds, 48 took 312, saving included
+#define DLP_SAVEAPPS(n) (15 + 2.6 * (n))    //     saving the image with them
+#define DLP_ALLAPPS 48        //              when the list of apps couldn't be read
 #define DLP_UPD     30.0      //              the smaller updates
-#define DLP_LCU    900.0      //              the cumulative update
-#define DLP_IMAGE  (DLP_OPEN + DLP_APPS + DLP_UPD + DLP_LCU)
+#define DLP_ADD    430.0      //              the cumulative update: adding it, cleaning up after it,
+#define DLP_CLEAN  140.0      //              saving the image and closing it, told apart by DISM's closing lines
+#define DLP_SAVE   380.0
+#define DLP_CLOSE   50.0
+#define DLP_LCU    (DLP_ADD + DLP_CLEAN + DLP_SAVE + DLP_CLOSE)
+#define DLP_APPS(n) (DLP_ADDAPPS(n) + DLP_SAVEAPPS(n))
+#define DLP_IMAGE  (DLP_OPEN + DLP_APPS(p->apps) + DLP_UPD + DLP_LCU)
 #define DLP_VIRT   170.0      // per extra edition made from Pro
-#define DLP_TAIL   320.0      // after the last edition: setup files, recovery image, the ISO
+#define DLP_TAIL   370.0      // after the last edition: setup files, recovery image, the ISO
 #define DLP_STALL  0.95       // a stage running longer than expected waits here for the next heading
 
 typedef struct {
-    BOOL on;                           // an ISO job is running, or its total time is being shown
+    BOOL on;                           // an ISO job is running, or how long it took is being shown
+    BOOL failed;                       // it ended without an ISO
     ULONGLONG t0, tEnd;                // when it started; when it ended, 0 until then
     int step;                          // 1 tools, 2 download, 3 conversion
     unsigned long long got, total;     // bytes
     ULONGLONG tBytes, gotAt;           // the last speed sample
     double rate, active;               // bytes per second, and the seconds it was measured over
     int images, virt;                  // editions serviced, and extra ones made from Pro
+    int apps;                          // apps added to each edition
+    BOOL inApps;                       // they're being added: DISM's next heading is the save after them
     int virtMade, image;               // of those, how many have started
     ULONGLONG tConv, tStage;
     double pos, len;                   // the stage's start and length, in the timed builds' seconds
     BOOL inTail, sawLcu;
+    int lcuOps;                        // DISM commands finished since the cumulative update began, -1 before it
     double pace0;                      // this PC's pace from its last build: 1 is the timed PC, 2 takes twice as long
     double shown;                      // the bar never moves back
 } DlProg;
@@ -33,16 +45,16 @@ static DlProg g_dlp;                   // guarded by g_lock: the output reader's
 
 static double dlpConvTotal(const DlProg* p) { return DLP_PREP + p->images * DLP_IMAGE + p->virt * DLP_VIRT + DLP_TAIL; }
 
-static void dlpBegin(DlProg* p, int images, int virt, double pace0, ULONGLONG now) {
+static void dlpBegin(DlProg* p, int images, int virt, int apps, double pace0, ULONGLONG now) {
     memset(p, 0, sizeof(*p));
     p->on = TRUE; p->t0 = now;
-    p->images = images < 1 ? 1 : images; p->virt = virt; p->pace0 = pace0;
+    p->images = images < 1 ? 1 : images; p->virt = virt; p->apps = apps; p->pace0 = pace0; p->lcuOps = -1;
 }
 
 // This PC's pace: the last build's to begin with, then this one's own once it has got through a few stages. A stage
 // that's overrunning counts too: the pace is at least what has passed over everything up to that stage's end.
 static double dlpPace(const DlProg* p, ULONGLONG now) {
-    double w = p->pos < 100 ? 0 : min(1.0, p->pos / 400);
+    double w = p->pos < 100 ? 0 : min(1.0, p->pos / 600);
     double own = p->pos > 0 ? (p->tStage - p->tConv) / 1000.0 / p->pos : 0;
     double pace = p->pace0 * (1 - w) + own * w;
     double least = p->pos + p->len >= 200 ? (now - p->tConv) / 1000.0 / (p->pos + p->len) : 0;
@@ -75,8 +87,27 @@ static void dlpGoTo(DlProg* p, double pos, double len, ULONGLONG now) {
 
 // A finished line of the job's output
 static void dlpLine(DlProg* p, const wchar_t* s, ULONGLONG now) {
-    if (p->step != 3 || wcsncmp(s, L"=== ", 4)) return;
+    if (p->step != 3) return;
+    if (wcsncmp(s, L"=== ", 4)) {
+        if (p->inApps && !wcsncmp(s, L"Deployment Image Servicing", 26)) {      // "Saving image" itself only arrives when it's over
+            p->inApps = FALSE;
+            dlpGoTo(p, DLP_PREP + (p->image - 1) * DLP_IMAGE + p->virtMade * DLP_VIRT + DLP_OPEN + DLP_ADDAPPS(p->apps), DLP_SAVEAPPS(p->apps), now);
+            return;
+        }
+        // Within the cumulative update: adding, then cleanup, then saving. Cleanup is skipped when the image can't
+        // take it yet, so "Saving image" also ends that wait.
+        if (p->inTail || !p->image || p->lcuOps < 0) return;
+        double at = DLP_PREP + p->image * DLP_IMAGE - DLP_LCU + p->virtMade * DLP_VIRT;
+        if (!wcsncmp(s, L"The operation completed", 23)) {
+            p->lcuOps++;
+            if (p->lcuOps == 1) dlpGoTo(p, at + DLP_ADD, DLP_CLEAN, now);
+            else if (p->lcuOps == 2) dlpGoTo(p, at + DLP_ADD + DLP_CLEAN, DLP_SAVE, now);
+        } else if (!wcscmp(s, L"Saving image") && p->lcuOps == 1) dlpGoTo(p, at + DLP_ADD + DLP_CLEAN, DLP_SAVE, now);
+        else if (!wcscmp(s, L"Unmounting image")) dlpGoTo(p, at + DLP_ADD + DLP_CLEAN + DLP_SAVE, DLP_CLOSE, now);
+        return;
+    }
     s += 4;
+    p->lcuOps = -1; p->inApps = FALSE;
     #define DLP_IS(t) (!wcsncmp(s, t, wcslen(t)))
     double tail = DLP_PREP + p->images * DLP_IMAGE + p->virt * DLP_VIRT;
     double img = DLP_PREP + (p->image > 0 ? p->image - 1 : 0) * DLP_IMAGE + p->virtMade * DLP_VIRT;
@@ -93,15 +124,15 @@ static void dlpLine(DlProg* p, const wchar_t* s, ULONGLONG now) {
         double at = p->inTail ? tail : DLP_PREP + max(p->image, 1) * DLP_IMAGE + p->virtMade * DLP_VIRT;
         if (p->virtMade < p->virt) p->virtMade++;
         dlpGoTo(p, at, DLP_VIRT, now);
-    } else if (!p->inTail && p->image && DLP_IS(L"Adding Microsoft Edge")) dlpGoTo(p, img + DLP_OPEN, DLP_APPS, now);
-    else if (!p->inTail && p->image && DLP_IS(L"Adding Apps"))    dlpGoTo(p, img + DLP_OPEN, DLP_APPS, now);
-    else if (!p->inTail && p->image && DLP_IS(L"Adding Updates")) dlpGoTo(p, img + DLP_OPEN + DLP_APPS, DLP_UPD, now);
-    else if (!p->inTail && p->image && DLP_IS(L"Adding LCU "))  { p->sawLcu = TRUE; dlpGoTo(p, img + DLP_OPEN + DLP_APPS + DLP_UPD, DLP_LCU, now); }
-    else if (DLP_IS(L"Rebuilding install.wim")) { p->inTail = TRUE; dlpGoTo(p, tail, 20, now); }
-    else if (DLP_IS(L"Creating winre.wim"))     { p->inTail = TRUE; dlpGoTo(p, tail + 20, 60, now); }
-    else if (DLP_IS(L"Adding LCU for "))        dlpGoTo(p, tail + 80, 200, now);
-    else if (DLP_IS(L"Adding winre.wim to"))    dlpGoTo(p, tail + 280, 20, now);
-    else if (p->inTail && DLP_IS(L"Creating ISO")) dlpGoTo(p, tail + 300, 20, now);
+    } else if (!p->inTail && p->image && DLP_IS(L"Adding Microsoft Edge")) dlpGoTo(p, img + DLP_OPEN, DLP_ADDAPPS(p->apps), now);
+    else if (!p->inTail && p->image && DLP_IS(L"Adding Apps"))  { p->inApps = TRUE; dlpGoTo(p, img + DLP_OPEN, DLP_ADDAPPS(p->apps), now); }
+    else if (!p->inTail && p->image && DLP_IS(L"Adding Updates")) dlpGoTo(p, img + DLP_OPEN + DLP_APPS(p->apps), DLP_UPD, now);
+    else if (!p->inTail && p->image && DLP_IS(L"Adding LCU "))  { p->sawLcu = TRUE; p->lcuOps = 0; dlpGoTo(p, img + DLP_OPEN + DLP_APPS(p->apps) + DLP_UPD, DLP_ADD, now); }
+    else if (DLP_IS(L"Rebuilding install.wim")) { p->inTail = TRUE; dlpGoTo(p, tail, 50, now); }
+    else if (DLP_IS(L"Creating winre.wim"))     { p->inTail = TRUE; dlpGoTo(p, tail + 50, 75, now); }
+    else if (DLP_IS(L"Adding LCU for "))        dlpGoTo(p, tail + 125, 205, now);
+    else if (DLP_IS(L"Adding winre.wim to"))    dlpGoTo(p, tail + 330, 15, now);
+    else if (p->inTail && DLP_IS(L"Creating ISO")) dlpGoTo(p, tail + 345, 25, now);
     #undef DLP_IS
 }
 
@@ -139,18 +170,35 @@ static void dlpClock(ULONGLONG ms, wchar_t* out, int cch) {
 static void dlpText(DlProg* p, ULONGLONG now, wchar_t* out, int cch) {
     wchar_t el[24], lf[32];
     dlpClock((p->tEnd ? p->tEnd : now) - p->t0, el, 24);
-    if (p->tEnd) { swprintf(out, cch, L"Took %s", el); return; }
+    if (p->tEnd) { swprintf(out, cch, p->failed ? L"Stopped after %s" : L"100%%  •  Took %s", el); return; }
     double left = dlpLeft(p, now);
     if (left < 0) { swprintf(out, cch, L"Elapsed %s  •  estimating the time left…", el); return; }
     int pct = dlpPercent(p, now), m = (int)ceil(left / 60);
     if (left < 60) { swprintf(out, cch, L"%d%%  •  Elapsed %s  •  less than a minute left", pct, el); return; }
     if (m > 20) m = (m + 2) / 5 * 5;
-    if (m >= 60) swprintf(lf, 32, L"%d h %d min", m / 60, m % 60);
+    if (m > 60)  swprintf(lf, 32, L"%d h %d min", m / 60, m % 60);
     else         swprintf(lf, 32, L"%d min", m);
     swprintf(out, cch, L"%d%%  •  Elapsed %s  •  about %s left", pct, el, lf);
 }
 
 // ---------- from the job ----------
+// The times for the log: the whole job, and the two long parts of it
+static ULONGLONG g_dlpT0, g_dlpTDown, g_dlpTConv;      // started; the download's start and the conversion's, 0 if it never got there
+static void dlpWriteTimes(HANDLE out, const wchar_t* what) {
+    ULONGLONG now = GetTickCount64();
+    wchar_t a[24], b[24], line[200];
+    dlpClock(now - g_dlpT0, a, 24);
+    swprintf(line, 200, L"\r\n%s: %s", what, a);
+    if (g_dlpTDown) {
+        dlpClock((g_dlpTConv ? g_dlpTConv : now) - g_dlpTDown, b, 24);
+        wcscat(line, L" (download "); wcscat(line, b);
+        if (g_dlpTConv) { dlpClock(now - g_dlpTConv, b, 24); wcscat(line, L", conversion "); wcscat(line, b); }
+        wcscat(line, L")");
+    }
+    wcscat(line, L"\r\n");
+    repWrite(out, line);
+}
+
 // Bytes written by aria2c itself. The files' sizes on disk don't tell: aria2 writes each file in 16 places at once, so
 // a file is nearly its full size long before it's whole.
 static unsigned long long g_dlpAll, g_dlpBefore, g_dlpGroup, g_dlpRound, g_dlpLast;   // all, earlier groups', this group's, this round's start, newest
@@ -175,9 +223,10 @@ static void dlpOnTick(HANDLE proc, HANDLE out) {
 
 // ---------- in the window ----------
 #define TIMER_DLP 8
+#define DLP_VALUE L"UupPace2"      // v1.10's UupPace was against other stage lengths
 static double dlpLoadPace(void) {
     DWORD v = 0, cb = sizeof(v);
-    if (RegGetValueW(HKEY_CURRENT_USER, LANG_KEY, L"UupPace", RRF_RT_REG_DWORD, NULL, &v, &cb) != ERROR_SUCCESS) return 1;
+    if (RegGetValueW(HKEY_CURRENT_USER, LANG_KEY, DLP_VALUE, RRF_RT_REG_DWORD, NULL, &v, &cb) != ERROR_SUCCESS) return 1;
     return v < 20 || v > 1000 ? 1 : v / 100.0;
 }
 // Called by the output reader, inside g_lock
@@ -195,36 +244,40 @@ static void dlpHide(void) {
     LeaveCriticalSection(&g_lock);
     KillTimer(g_hwnd, TIMER_DLP);
 }
-// The job ended. Only a finished ISO leaves its total time on the page, and teaches the pace.
+// The job ended. How long it took stays on the page until the next one. Only a finished ISO teaches the pace.
 static void dlpEnd(BOOL ok) {
     KillTimer(g_hwnd, TIMER_DLP);
     EnterCriticalSection(&g_lock);
     DlProg* p = &g_dlp;
     DWORD save = 0;
-    if (p->on && ok) {
+    if (p->on && !p->tEnd) {
         p->tEnd = GetTickCount64();
-        if (p->sawLcu && p->inTail && p->tConv) {
+        p->failed = !ok;
+        if (ok && p->sawLcu && p->inTail && p->tConv) {
             double pace = (p->tEnd - p->tConv) / 1000.0 / dlpConvTotal(p);
             if (pace >= 0.2 && pace <= 10) save = (DWORD)(pace * 100);
         }
-    } else p->on = FALSE;
+    }
     LeaveCriticalSection(&g_lock);
-    if (save) RegSetKeyValueW(HKEY_CURRENT_USER, LANG_KEY, L"UupPace", REG_DWORD, &save, sizeof(save));
+    if (save) {
+        RegSetKeyValueW(HKEY_CURRENT_USER, LANG_KEY, DLP_VALUE, REG_DWORD, &save, sizeof(save));
+        RegDeleteKeyValueW(HKEY_CURRENT_USER, LANG_KEY, L"UupPace");
+    }
 }
 
 // In the page's heading, where there was nothing: the line at the right, the bar under the title. Covers no control.
 static void dlpDraw(int x1, int x2, int textL, int top) {
-    wchar_t t[160] = L""; int pct = 0; BOOL bar = FALSE;
+    wchar_t t[160] = L""; int pct = 0; BOOL ended = FALSE, failed = FALSE;
     ULONGLONG now = GetTickCount64();
     EnterCriticalSection(&g_lock);
     if (g_dlp.on) {
         dlpText(&g_dlp, now, t, 160);
-        bar = !g_dlp.tEnd;
-        pct = dlpPercent(&g_dlp, now);
+        ended = g_dlp.tEnd != 0; failed = g_dlp.failed;
+        pct = ended ? 100 : dlpPercent(&g_dlp, now);
     }
     LeaveCriticalSection(&g_lock);
     if (!t[0]) return;
     RECT r = { textL, top + dp(14), x2, top + dp(46) };
-    drawText(g_fSmall, t, r, bar ? g_accent : mutedRGB(), DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-    if (bar) drawProgressBar(x1, x2, top + dp(73), pct);
+    drawText(g_fSmall, t, r, !ended ? g_accent : failed ? mutedRGB() : noteGreen(), DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    if (!ended || !failed) drawProgressBar(x1, x2, top + dp(73), pct);
 }

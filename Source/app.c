@@ -337,7 +337,7 @@ static void aioClick(int id, int x, int y) {
     if (id >= A_O_CUR && id <= A_O_SW2) { offClick(id); return; }
     if (id >= A_X_WINAPP && id <= A_X_UNINSTALL) { rmClick(id, y); return; }
 #if WCU_DOWNLOAD
-    if (id >= A_D_X64 && id <= A_D_CANCEL) { dlClick(id); return; }
+    if (id >= A_D_X64 && id <= A_D_WORKDEF) { dlClick(id); return; }
 #endif
     if (id == A_T_TERMINAL) { tweakTerminalRestore(); InvalidateRect(g_hwnd, NULL, FALSE); return; }
     if (id == A_R_TOGGLE) { g_repShow = !g_repShow; InvalidateRect(g_hwnd, NULL, FALSE); return; }
