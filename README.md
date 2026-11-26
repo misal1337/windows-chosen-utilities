@@ -101,73 +101,15 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
   its full notice is at the top of that file.
 
 ## Changelog
-**6 Nov 2026: first build**
-- Disk Clean-up, Reg Networks, the DISM install page and the Boot to UEFI button.
-- Windows AIO page (WIM Editor, ESD to ISO, Folder2ISO / ISO2Folder, WinToUSB, Hash).
+Highlights only. Every release's full notes are on the [Releases page](https://github.com/misal1337/windows-chosen-utilities/releases).
 
-**7 Nov 2026**
-- Restyled to the net-merge Windows 11 look: Mica, fades, DirectWrite text.
-- System Restore options added to Disk Clean-up.
-- Misc Tweaks page added (Terminal settings and the Enable/Disable switches).
-- Download Windows page added. The DISM page was renamed Manual Updates, and the source moved to `Source`.
-
-**8 Nov 2026**
-- Manual Updates now downloads the latest `.msu` and ndp481 updates itself.
-- Run as TI and Windows Repair pages added.
-- Download Windows: preinstalled app picker, Arm64, more reliable downloads, nothing left in the root of C:,
-  and a leftovers clean-up.
-- Version label added.
-
-**9 Nov 2026: v1.3**
-- Install Apps page added, with update buttons and default file types for PotPlayer and NanaZip.
-- MS Office 365 page added: download, install and channel switching.
-- Windows 11 style dialogs replace message boxes, with one prompt per action. The Progress log scrolls.
-
-**25 Nov 2026: v1.5**
-- First public release, open source under the MIT licence.
-
-**25 Nov 2026: v1.6**
-- Output boxes no longer cut words in half at the end of a row.
-- Download Windows: small files download first, so fewer links expire on slow connections, and expired links
-  show one plain line instead of rows of 403 errors.
-- If a download fails, the error says how many links Microsoft refused in the last round.
-- Release builds are made by GitHub Actions, and the exe's file properties show its version.
-
-**25 Nov 2026: v1.7**
-- Runs on PCs whose processor lacks AVX2. Earlier release builds could crash at start on those.
-- If a job finishes while the window is minimized, its message opens on screen. Before, it opened off the screen
-  and the app couldn't be clicked.
-
-**25 Nov 2026: v1.8**
-- Download Windows and ESD to ISO: the page's own status line replaces the "Windows ISO is ready" box, so a
-  finished job never blocks the window. A green dot marks the page, and the taskbar button flashes.
-- README: code signing section corrected. Releases are unsigned.
-
-**25 Nov 2026: v1.9**
-- Languages: English, German, French, Spanish, Portuguese (Brazil) and Simplified Chinese, from the globe button next
-  to the theme button. Follows Windows until you choose one; any other Windows language shows English.
-- The translations haven't been checked by native speakers, and some messages are still in English. Corrections are
-  welcome: they're all in [lang.txt](Source/lang.txt).
-- Download Windows: a dropped connection shows one line in the output instead of dozens.
-
-**25 Nov 2026: v1.10**
-- Russian added (not yet checked by a native speaker; corrections are welcome in [lang.txt](Source/lang.txt)).
-- Download Windows: a progress bar, the elapsed time and an estimate of the time left for the whole job. The estimate
-  learns this PC's conversion speed after the first build.
-- Version numbers now run to x.19 before the next whole number.
-
-**26 Nov 2026: v1.11**
-- Download Windows: the bar no longer stands still near 80%. The longest stage is now followed in four parts, and the
-  apps stage in two.
-- The full bar and the time taken stay on the page after the job, until the next one. A cancelled or failed job shows
-  how long it ran.
-- The log ends with the time taken: the whole job, the download and the conversion. Just above it, a finished build
-  lists the PC's CPU, RAM, the work drive's type (NVMe, SSD or HDD) and capacity, and the average download speed.
-- Download Windows: a Work folder choice, for PCs short of space on C:. The default is still Documents. It shows
-  the free space on that drive, and the work files are deleted after every build, as before.
-- Download Windows: the ISO's name now lists its editions after the version, such as
-  `26300.10075_26H2_home.pro_x64_Release Preview_19_Nov_26.iso`.
-- Download Windows: the build number, x64/arm64 and Find share one row, so the output panel is taller.
-- Install Apps: IDM's Update button uses IDM's own update (idmupdt.exe) and runs without a prompt; when IDM is
-  installed, its button reads Reinstall IDM and runs the full setup.
-- Install Apps: NanaZip also opens 7Z files, and Update buttons no longer ask for confirmation.
+- **v1.11** (26 Nov 2026): Download Windows gets a Work folder choice, edition names in the ISO's name, steadier
+  progress, and the time taken plus this PC's specs in the log. IDM updates with its own update file.
+- **v1.10** (25 Nov 2026): Download Windows shows progress, elapsed time and time left. Russian added.
+- **v1.9** (25 Nov 2026): six languages (English, German, French, Spanish, Portuguese and Simplified Chinese).
+- **v1.8** (25 Nov 2026): a finished ISO is announced on the page instead of in a box that blocked the window.
+- **v1.7** (25 Nov 2026): runs on processors without AVX2; job messages no longer open off screen.
+- **v1.6** (25 Nov 2026): steadier downloads on slow connections; release builds made by GitHub Actions.
+- **v1.5** (25 Nov 2026): first public release, open source under the MIT licence.
+- **Before v1.5** (6–9 Nov 2026): the pages were built: Disk Clean-up, Windows AIO, Misc Tweaks, Download Windows,
+  Manual Updates, Run as TI, Windows Repair, Install Apps and MS Office 365, with the Windows 11 look.
