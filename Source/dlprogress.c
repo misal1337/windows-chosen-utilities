@@ -184,11 +184,12 @@ static void dlpText(DlProg* p, ULONGLONG now, wchar_t* out, int cch) {
 // ---------- from the job ----------
 // The times for the log: the whole job, and the two long parts of it
 static ULONGLONG g_dlpT0, g_dlpTDown, g_dlpTConv;      // started; the download's start and the conversion's, 0 if it never got there
-static void dlpWriteTimes(HANDLE out, const wchar_t* what) {
+// gap: a blank line before it (none when the PC's facts are written just above)
+static void dlpWriteTimes(HANDLE out, const wchar_t* what, BOOL gap) {
     ULONGLONG now = GetTickCount64();
     wchar_t a[24], b[24], line[200];
     dlpClock(now - g_dlpT0, a, 24);
-    swprintf(line, 200, L"\r\n%s: %s", what, a);
+    swprintf(line, 200, L"%s%s: %s", gap ? L"\r\n" : L"", what, a);
     if (g_dlpTDown) {
         dlpClock((g_dlpTConv ? g_dlpTConv : now) - g_dlpTDown, b, 24);
         wcscat(line, L" (download "); wcscat(line, b);

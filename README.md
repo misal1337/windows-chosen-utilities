@@ -161,7 +161,8 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
   apps stage in two.
 - The full bar and the time taken stay on the page after the job, until the next one. A cancelled or failed job shows
   how long it ran.
-- The log ends with the time taken: the whole job, the download and the conversion.
+- The log ends with the time taken: the whole job, the download and the conversion. Just above it, a finished build
+  lists the PC's CPU, RAM, the work drive's type (NVMe, SSD or HDD) and capacity, and the average download speed.
 - Download Windows: a Work folder choice, for PCs short of space on C:. The default is still Documents. It shows
   the free space on that drive, and the work files are deleted after every build, as before.
 - Download Windows: the ISO's name now lists its editions after the version, such as

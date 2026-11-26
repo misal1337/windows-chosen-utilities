@@ -939,6 +939,18 @@ int wmain(void) {
         wprintf(L"region test: %s (find %d india %d japan %d us %d order %d kosovo %d)\n", ok ? L"PASS" : L"FAIL", findOk, india, japan, us, west, kosovo);
         filePass = filePass && ok;
     }
+#if WCU_DOWNLOAD
+    // ---- the PC's facts at the end of a build's log: the drive under C: is found, and sizes read as disk makers write them ----
+    {
+        wchar_t kind[40], s1[24], s2[24], s3[24]; unsigned long long size = 0;
+        BOOL disk = dlDiskFacts(L'C', kind, 40, &size) && size > 0;
+        dlDiskSize(1000204886016ULL, s1, 24); dlDiskSize(512110190592ULL, s2, 24); dlDiskSize(2000398934016ULL, s3, 24);
+        BOOL fmt = !wcscmp(s1, L"1 TB") && !wcscmp(s2, L"512 GB") && !wcscmp(s3, L"2 TB");
+        wchar_t cap[24] = L""; if (size) dlDiskSize(size, cap, 24);
+        wprintf(L"pc facts test: %s (C: is %s, %s; sizes %s %s %s)\n", disk && fmt ? L"PASS" : L"FAIL", disk ? kind : L"?", cap, s1, s2, s3);
+        filePass = filePass && disk && fmt;
+    }
+#endif
 
     // Default-app hashes: every choice Windows has written for this user must check out. Only reads.
     {

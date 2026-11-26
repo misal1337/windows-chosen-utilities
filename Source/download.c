@@ -1244,6 +1244,80 @@ static void dlIsoName(const DlFacts* f, const wchar_t* isoName, const wchar_t* e
     wcsncat(out, L".iso", cch - wcslen(out) - 1);
 }
 
+// ---------- this PC, for the end of the log ----------
+// So a slow build can be told apart from a slow PC: the processor, the memory, the drive the work was done on, and how
+// fast the files came down.
+
+// The disk under a volume ("C:"): what kind it is and how big. FALSE if Windows won't say.
+static BOOL dlDiskFacts(wchar_t letter, wchar_t* kind, int cchKind, unsigned long long* size) {
+    wchar_t vol[16]; swprintf(vol, 16, L"\\\\.\\%c:", letter);
+    HANDLE v = CreateFileW(vol, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (v == INVALID_HANDLE_VALUE) return FALSE;
+    BYTE ext[sizeof(VOLUME_DISK_EXTENTS) + 8 * sizeof(DISK_EXTENT)]; DWORD got = 0;
+    BOOL ok = DeviceIoControl(v, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, NULL, 0, ext, sizeof(ext), &got, NULL)
+              && ((VOLUME_DISK_EXTENTS*)ext)->NumberOfDiskExtents >= 1;
+    CloseHandle(v);
+    if (!ok) return FALSE;
+    wchar_t disk[40]; swprintf(disk, 40, L"\\\\.\\PhysicalDrive%lu", ((VOLUME_DISK_EXTENTS*)ext)->Extents[0].DiskNumber);
+    HANDLE d = CreateFileW(disk, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (d == INVALID_HANDLE_VALUE) return FALSE;
+
+    STORAGE_PROPERTY_QUERY q; memset(&q, 0, sizeof(q));
+    q.PropertyId = StorageAdapterProperty; q.QueryType = PropertyStandardQuery;
+    STORAGE_ADAPTER_DESCRIPTOR ad; memset(&ad, 0, sizeof(ad));
+    BOOL nvme = DeviceIoControl(d, IOCTL_STORAGE_QUERY_PROPERTY, &q, sizeof(q), &ad, sizeof(ad), &got, NULL) && ad.BusType == BusTypeNvme;
+    BOOL usb  = ad.BusType == BusTypeUsb;
+    q.PropertyId = StorageDeviceSeekPenaltyProperty;
+    DEVICE_SEEK_PENALTY_DESCRIPTOR sp; memset(&sp, 0, sizeof(sp));
+    BOOL seekKnown = DeviceIoControl(d, IOCTL_STORAGE_QUERY_PROPERTY, &q, sizeof(q), &sp, sizeof(sp), &got, NULL) && got >= sizeof(sp);
+    // the size from the drive's geometry: unlike IOCTL_DISK_GET_LENGTH_INFO, it needs no read access to the disk
+    BYTE geo[sizeof(DISK_GEOMETRY_EX) + 256]; memset(geo, 0, sizeof(geo));
+    *size = DeviceIoControl(d, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, NULL, 0, geo, sizeof(geo), &got, NULL)
+            ? (unsigned long long)((DISK_GEOMETRY_EX*)geo)->DiskSize.QuadPart : 0;
+    CloseHandle(d);
+
+    const wchar_t* k = nvme ? L"NVMe" : !seekKnown ? L"unknown type" : sp.IncursSeekPenalty ? L"HDD" : L"SSD";
+    swprintf(kind, cchKind, L"%s%s", k, usb ? L" (USB)" : L"");
+    return TRUE;
+}
+
+// Disk makers count in powers of ten (a "1 TB" disk is 1,000,204,886,016 bytes), so the capacity is shown their way
+static void dlDiskSize(unsigned long long b, wchar_t* out, int cch) {
+    if (b >= 1000000000000ULL) swprintf(out, cch, L"%.1f TB", b / 1e12);
+    else swprintf(out, cch, L"%.0f GB", b / 1e9);
+    size_t n = wcslen(out);                                     // "1.0 TB" reads better as "1 TB"
+    if (n > 5 && !wcscmp(out + n - 5, L".0 TB")) wcscpy(out + n - 5, L" TB");
+}
+
+// The lines just above "Time taken". bytes: what was downloaded; ms: how long the download itself ran.
+static void dlWriteSystemFacts(HANDLE out, wchar_t workDrive, unsigned long long bytes, ULONGLONG ms) {
+    wchar_t line[400], cpu[128] = L""; DWORD cb = sizeof(cpu);
+    repWrite(out, L"\r\n");
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", L"ProcessorNameString",
+                     RRF_RT_REG_SZ, NULL, cpu, &cb) == ERROR_SUCCESS) {
+        wchar_t* c = cpu; while (*c == L' ') c++;                       // some list it with spaces in front
+        for (wchar_t* e = c + wcslen(c); e > c && e[-1] == L' '; ) *--e = 0;
+        swprintf(line, 400, L"CPU: %s\r\n", c);
+        repWrite(out, line);
+    }
+    ULONGLONG kb = 0;
+    if (GetPhysicallyInstalledSystemMemory(&kb) && kb) {
+        swprintf(line, 400, L"RAM: %.0f GB\r\n", kb / 1048576.0);
+        repWrite(out, line);
+    }
+    wchar_t kind[40], cap[24]; unsigned long long size = 0;
+    if (workDrive && dlDiskFacts(workDrive, kind, 40, &size)) {
+        if (size) dlDiskSize(size, cap, 24); else wcscpy(cap, L"size unknown");
+        swprintf(line, 400, L"Work drive (%c:): %s, %s\r\n", workDrive, kind, cap);
+        repWrite(out, line);
+    }
+    if (bytes && ms >= 1000) {
+        double mbs = bytes / 1048576.0 / (ms / 1000.0);
+        swprintf(line, 400, L"Average download speed: %.1f MB/s (%.0f Mbit/s)\r\n", mbs, bytes * 8 / 1e6 / (ms / 1000.0));
+        repWrite(out, line);
+    }
+}
+
 // Room for a download of total bytes, checked before anything is downloaded. The work folder's drive holds the
 // download, the images built from it and working room. The finished ISO is then copied to the Desktop: on the same
 // drive that's only a rename, already counted; on another drive it needs room for the whole ISO, which is never
@@ -1671,7 +1745,10 @@ static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
 
     g_dlpAll = total; g_dlpBefore = g_dlpLast = 0;
     dlpReport(out);
+    ULONGLONG tAria = GetTickCount64();
     DWORD dr = dlDownloadAll(&s, edAll, files, nEd, nFiles, pAria, uups, work, cancel, out);
+    ULONGLONG ariaMs = GetTickCount64() - tAria;
+    unsigned long long dlBytes = total;
     if (dr == ERROR_CANCELLED) goto stopped;
     if (dr) goto done;
     repWrite(out, L"\r\nDownload finished.\r\n");
@@ -1713,8 +1790,10 @@ static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
         repWrite(out, line);
         goto done;
     }
+    wchar_t workDrive = root[1] == L':' ? root[0] : 0;   // read before the folder goes
     dlRootRemove(out);          // before the last line, which the window reads as the end
-    dlpWriteTimes(out, L"Time taken");
+    dlWriteSystemFacts(out, workDrive, dlBytes, ariaMs);
+    dlpWriteTimes(out, L"Time taken", FALSE);
     swprintf(line, 600, L"\r\n" DL_SAVED_PREFIX L"%s\r\n", finalPath);
     repWrite(out, line);
     result = 0;
@@ -1726,7 +1805,7 @@ stopped:
 done:
     if (converting && result != 0) dlCleanUpAfterStop(conv, out);   // a stopped converter can leave an image mounted
     dlRootRemove(out);
-    if (result != 0) dlpWriteTimes(out, L"Stopped after");
+    if (result != 0) dlpWriteTimes(out, L"Stopped after", TRUE);
     free(files);
     CloseHandle(cancel);
     return result;
