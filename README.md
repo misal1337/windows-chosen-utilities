@@ -62,8 +62,10 @@ and run it. Nothing is installed.
   the firmware settings.
 
 ## Notes
-- The exe is not code-signed yet, so SmartScreen may warn you on first launch: *More info → Run anyway*.
-  On PCs with Smart App Control turned on, Windows blocks it until it is signed.
+- The exe is not code-signed, so SmartScreen may warn you on first launch: *More info → Run anyway*.
+  On PCs with Smart App Control turned on, Windows blocks it: turn Smart App Control off in Windows Security →
+  App & browser control → Smart App Control settings. On Windows 11 build 26100.8246 / 26200.8246 or later (and
+  every 26300 build) it can be switched back on any time; on older builds only by resetting Windows.
 - Download Windows, Manual Updates and Office need the internet and rely on Microsoft's and UUP dump's servers.
 - To build from source: install [Zig](https://ziglang.org/download/) (no Visual Studio needed), then `cd Source`
   and run `.\build.ps1`.
