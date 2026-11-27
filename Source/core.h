@@ -180,9 +180,9 @@ static RECT g_rcTheme, g_rcLang;
 // Each range must hold all its items: an overlap makes two things pull one slot both ways every frame, which
 // repaints the window nonstop (a ninth rail item once shared the dialog dim's slot and made the whole app flicker).
 enum { ANIM_BTN = 0, ANIM_ROW = 10, ANIM_CHK = 20, ANIM_NAV = 30, ANIM_NAVSEL = 46, ANIM_DIM = 62, ANIM_DLG = 63,
-       ANIM_TAB = 66, ANIM_WROW = 74, ANIM_DROW = 90, ANIM_AIO = 100, ANIM_AIOF = 280, ANIM_MOPT = 460,
-       ANIM_VIEW = 470, ANIM_SROFF = 480, ANIM_SROFFH = 481,
-       ANIM_XROW = 482, ANIM_XCHK = 506, ANIM_LANG = 554, ANIM_SELFUPD = 555, ANIM_MAX = 556 };
+       ANIM_TAB = 66, ANIM_WROW = 74, ANIM_DROW = 90, ANIM_AIO = 100, ANIM_AIOF = 320, ANIM_MOPT = 540,
+       ANIM_VIEW = 550, ANIM_SROFF = 560, ANIM_SROFFH = 561,
+       ANIM_XROW = 562, ANIM_XCHK = 586, ANIM_LANG = 634, ANIM_SELFUPD = 635, ANIM_MAX = 636 };
 #define ANIM_XROW_N (ANIM_XCHK - ANIM_XROW)   // Remove Apps: hover of each visible list row
 #define ANIM_XCHK_N (ANIM_LANG - ANIM_XCHK)    // Remove Apps: each app's tick (ANIM_LANG and ANIM_SELFUPD are one slot each)
 _Static_assert(NAV_COUNT <= ANIM_NAVSEL - ANIM_NAV && NAV_COUNT <= ANIM_DIM - ANIM_NAVSEL, "more rail items than animation slots");

@@ -1029,6 +1029,16 @@ int wmain(void) {
         filePass = filePass && ok;
     }
 
+    // AB Download Manager, Craft Launcher: the newest GitHub release gives that repo's own Windows setup, with a SHA-256
+    for (int app = APP_ABDM; app <= APP_CRAFT; app++) {
+        wchar_t url[600], ver[64], want[200]; DWORD e = 0;
+        swprintf(want, 200, L"https://github.com/%s/releases/download/", APPS[app].ghRepo);
+        BOOL ok = appsResolveUrl(app, url, 600, &e) && dlHex64(g_appsSha) && iswdigit(g_appsOffered[0]) &&
+                  appsLatestVersion(app, ver, 64) && !wcscmp(ver, g_appsOffered) && !wcsncmp(url, want, wcslen(want));
+        wprintf(L"github release test %s: %s (%s %s %s)\n", APPS[app].name, ok ? L"PASS" : L"FAIL", g_appsOffered, url, g_appsSha);
+        filePass = filePass && ok;
+    }
+
     // GPU drivers: the hotfix search finds the real 621.35 above 621.24, and AMD's pages give a driver for a laptop Radeon,
     // an old Polaris card and (through the processor's page) this PC's Ryzen graphics
     {

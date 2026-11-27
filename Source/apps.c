@@ -8,7 +8,9 @@
 
 #define RES_POT_REG 30                    // app.rc embeds apps/PotPlayerMini64.reg under this id
 
-enum { APP_FIREFOX, APP_IDM, APP_POT, APP_CRD, APP_NANAZIP, APP_TAILSCALE, APP_COUNT };
+enum { APP_FIREFOX, APP_IDM, APP_POT, APP_CRD, APP_NANAZIP, APP_TAILSCALE, APP_ABDM, APP_CRAFT, APP_COUNT };
+#define ABDM_REPO L"amir1376/ab-download-manager"
+#define APPS_PAGES 2                      // the page's sections (Page 1, Page 2); AppDef.page says where each app is
 enum { KIND_EXE, KIND_MSI, KIND_MSIX };
 typedef struct {
     const wchar_t* label;      // the button
@@ -25,6 +27,10 @@ typedef struct {
     const wchar_t* package;    // a packaged (MSIX) app's name, as its full package names start
     const wchar_t* fileName;   // what the download is saved as
     const wchar_t* storeId;    // installed from the Microsoft Store with winget instead (which then keeps it updated)
+    BOOL perUser;              // its setup installs for the signed-in user only (AppData, HKCU): run as that user
+    int page;                  // which section of the page lists it (0 = Page 1)
+    const wchar_t* ghRepo;     // from this GitHub repo's newest release...
+    const wchar_t* ghAsset;    // ...the file named so (the version, then x64 or arm64), with GitHub's SHA-256
 } AppDef;
 static const AppDef APPS[APP_COUNT] = {
     { L"Firefox", L"Firefox", L"Mozilla Firefox", L"firefox.exe", TRUE, L"Mozilla Corporation", L"/S",
@@ -44,18 +50,32 @@ static const AppDef APPS[APP_COUNT] = {
     // its tray app keeps running through an update, as Tailscale's own updater does it
     { L"Tailscale", L"Tailscale", L"Tailscale", L"tailscale-ipn.exe", FALSE, L"Tailscale Inc.", L"/qn /norestart", NULL,
       L"Tailscale", KIND_MSI, L"%ProgramFiles%\\Tailscale", NULL, L"Tailscale_setup.msi" },
+    // Page 2. From its GitHub releases. Its NSIS setup installs for this user only (%LOCALAPPDATA%\ABDownloadManager,
+    // HKCU) and isn't signed, so the download is checked against the SHA-256 GitHub lists for it. An update is the same
+    // setup again, as the app's own updater does it for an installed copy (the zip is the whole app, not a smaller patch).
+    { L"AB Download Manager", L"AB Download Manager", L"AB Download Manager", L"ABDownloadManager.exe", TRUE, NULL, L"/S", NULL,
+      L"AB Download Manager", KIND_EXE, NULL, NULL, L"ABDownloadManager_setup.exe", NULL, TRUE, 1,
+      ABDM_REPO, L"ABDownloadManager_%s_windows_%s.exe" },
+    // ArtCraft's launcher: a per-user MSI (%LOCALAPPDATA%\Programs\ArtCraft\Launcher, HKCU), signed, no desktop shortcut
+    // when asked; its uninstall entry names no program, so its folder is given
+    { L"Craft Launcher", L"ArtCraft Launcher", L"ArtCraft Launcher", L"artcraft-launcher.exe", TRUE, L"Learning Machines Inc",
+      L"/qn /norestart INSTALLDESKTOPSHORTCUT=0", NULL, L"ArtCraft Launcher", KIND_MSI, L"%LOCALAPPDATA%\\Programs\\ArtCraft\\Launcher",
+      NULL, L"ArtCraftLauncher_setup.msi", NULL, TRUE, 1, L"storytold/craft-launcher", L"artcraft-launcher-%s-windows-%s.msi" },
 };
+// How each uninstaller runs silently (an .msi: msiexec /x, a packaged app: Remove-AppxPackage)
+static const wchar_t* APPS_UNINST[APP_COUNT] = { L"/S", L"-skdlgs", L"/S", NULL, NULL, NULL, L"/S", NULL };
 #define IDM_PAGE L"https://www.internetdownloadmanager.com/download.html"
 static const wchar_t* POT_EXTS[] = { L".mp4", L".mkv", L".mpg", L".mpeg", L".wmv" };
 static const wchar_t* NANAZIP_EXTS[] = { L".zip", L".rar", L".7z" };
 
 // what the helper's exit code says: the step in the top byte, Windows' or the installer's code below it
-enum { APS_OK, APS_LINK, APS_DOWNLOAD, APS_SIGN, APS_INSTALL, APS_MISSING, APS_FOLDER, APS_SAME };
+enum { APS_OK, APS_LINK, APS_DOWNLOAD, APS_SIGN, APS_INSTALL, APS_MISSING, APS_FOLDER, APS_SAME, APS_UNINSTALL, APS_STILL };
 #define APS_CODE(step, detail) (((DWORD)(step) << 24) | ((DWORD)(detail) & 0xFFFFFF))
 // progress from the helper (WM_APP_APPSPROG): wParam a step, lParam megabytes so far while downloading
-enum { APP_STEP_LINK = 1, APP_STEP_DOWNLOAD, APP_STEP_SIGN, APP_STEP_INSTALL, APP_STEP_CLOSE, APP_STEP_SETTINGS };
+enum { APP_STEP_LINK = 1, APP_STEP_DOWNLOAD, APP_STEP_SIGN, APP_STEP_INSTALL, APP_STEP_CLOSE, APP_STEP_SETTINGS, APP_STEP_UNINSTALL };
 
 static int appsVerCmp(const wchar_t* a, const wchar_t* b);
+static BOOL appsAllowed(const wchar_t* s, const wchar_t* extra);
 
 static int     g_appsRun = -1;            // the app being installed, or -1
 static int     g_appsStep = 0, g_appsMb = 0;
@@ -385,6 +405,40 @@ static BOOL appsGoogleLatest(const char* appId, wchar_t* out, int cch) {
     return appsCrdNewest(8, out, cch, url, 600, sha);
 }
 
+// An app's newest GitHub release (AppDef.ghRepo): its version (the tag without the "v"), the Windows setup for this
+// PC's CPU, and the SHA-256 GitHub lists for that file. Only a file of that repo's own release is taken.
+static BOOL appsGhRelease(const AppDef* ad, wchar_t* ver, int cch, wchar_t* url, int urlCch, wchar_t* sha /* 65 */) {
+    ver[0] = 0; url[0] = 0; sha[0] = 0;
+    if (!ad->ghRepo || !ad->ghAsset) return FALSE;
+    char* body = NULL; DWORD status = 0;
+    wchar_t api[200];
+    swprintf(api, 200, L"https://api.github.com/repos/%s/releases/latest", ad->ghRepo);
+    if (dlHttp(api, &body, NULL, &status) || status != 200 || !body) { free(body); return FALSE; }
+    wchar_t tag[40];
+    jText(jGet(body, "tag_name"), tag, 40);
+    const wchar_t* v = tag[0] == L'v' ? tag + 1 : tag;
+    USHORT proc = 0, native = 0;
+    if (!IsWow64Process2(GetCurrentProcess(), &proc, &native)) native = IMAGE_FILE_MACHINE_AMD64;
+    wchar_t want[128], prefix[200], got[600] = L"", hash[65] = L"";
+    swprintf(want, 128, ad->ghAsset, v, native == IMAGE_FILE_MACHINE_ARM64 ? L"arm64" : L"x64");
+    swprintf(prefix, 200, L"https://github.com/%s/releases/download/%s/", ad->ghRepo, tag);
+    JIter it; const char* k; const char* a;
+    const char* assets = jGet(body, "assets");
+    if (appsAllowed(v, L".") && iswdigit(v[0]) && assets && jOpen(assets, &it))
+        while (jNext(&it, &k, &a)) {
+            wchar_t name[128], digest[80];
+            jText(jGet(a, "name"), name, 128);
+            if (wcscmp(name, want)) continue;
+            jText(jGet(a, "browser_download_url"), got, 600);
+            jText(jGet(a, "digest"), digest, 80);
+            if (!wcsncmp(digest, L"sha256:", 7)) { lstrcpynW(hash, digest + 7, 65); _wcslwr(hash); }
+        }
+    free(body);
+    if (wcsncmp(got, prefix, wcslen(prefix)) || wcscmp(got + wcslen(prefix), want) || !dlHex64(hash)) return FALSE;
+    lstrcpynW(ver, v, cch); lstrcpynW(url, got, urlCch); wcscpy(sha, hash);
+    return TRUE;
+}
+
 static BOOL appsLatestVersion(int app, wchar_t* out, int cch) {
     out[0] = 0;
     char* body = NULL; DWORD status = 0; BOOL ok = FALSE;
@@ -424,6 +478,11 @@ static BOOL appsLatestVersion(int app, wchar_t* out, int cch) {
         if (!dlHttp(L"https://pkgs.tailscale.com/stable/?mode=json", &body, NULL, &status) && status == 200)
             ok = appsJsonVersion(body, "\"MSIsVersion\"", out, cch);
         break;
+    case APP_ABDM: case APP_CRAFT: {
+        wchar_t url[600], sha[65];
+        ok = appsGhRelease(&APPS[app], out, cch, url, 600, sha);
+        break;
+    }
     }
     free(body);
     if (!ok) out[0] = 0;
@@ -441,6 +500,10 @@ static BOOL appsResolveUrl(int app, wchar_t* url, int cch, DWORD* err) {
         if (!appsCrdNewest(8, g_appsOffered, 64, url, cch, g_appsSha)) { *err = ERROR_NOT_FOUND; return FALSE; }
         return TRUE;
     }
+    if (a->ghRepo) {                    // the release's setup, with the SHA-256 GitHub lists (AB DM's setup isn't signed)
+        if (!appsGhRelease(a, g_appsOffered, 64, url, cch, g_appsSha)) { *err = ERROR_NOT_FOUND; return FALSE; }
+        return TRUE;
+    }
     wchar_t v[64];
     if (!appsLatestVersion(app, v, 64)) { *err = ERROR_NOT_FOUND; return FALSE; }
     if (app == APP_TAILSCALE) swprintf(url, cch, L"https://pkgs.tailscale.com/stable/tailscale-setup-%s-amd64.msi", v);
@@ -449,7 +512,8 @@ static BOOL appsResolveUrl(int app, wchar_t* url, int cch, DWORD* err) {
 }
 
 // ---------- the elevated helper ----------
-static void appsProgress(int step, int mb) { if (g_appsNotify) PostMessageW(g_appsNotify, WM_APP_APPSPROG, step, mb); }
+// (a per-user app installs in the window's own process, so its progress goes straight to the window)
+static void appsProgress(int step, int mb) { HWND to = g_appsNotify ? g_appsNotify : g_hwnd; if (to) PostMessageW(to, WM_APP_APPSPROG, step, mb); }
 static BOOL appsDownloadTick(unsigned long long got, void* ctx) {
     int* last = (int*)ctx, mb = (int)(got >> 20);
     if (mb != *last) { *last = mb; appsProgress(APP_STEP_DOWNLOAD, mb); appsSayOver(L"Downloading… %d MB", mb); }
@@ -592,7 +656,15 @@ static void appsTidyShortcuts(const AppDef* a, BOOL common) {
     if (SUCCEEDED(co)) CoUninitialize();
 }
 
-// The app's shortcut straight in the all-users Programs folder, made if it isn't there
+// The app's shortcut straight in the all-users Programs folder, made if it isn't there (the user's rule, also for an app
+// installed for one user: needs administrator rights)
+static BOOL appsLinkPath(const AppDef* a, wchar_t* lnk /* MAX_PATH */) {
+    PWSTR base = NULL;
+    if (!a->link || FAILED(SHGetKnownFolderPath(&FOLDERID_CommonPrograms, 0, NULL, &base))) return FALSE;
+    swprintf(lnk, MAX_PATH, L"%s\\%s.lnk", base, a->link);
+    CoTaskMemFree(base);
+    return TRUE;
+}
 static void appsPlaceShortcut(const AppDef* a) {
     wchar_t ver[64], exe[MAX_PATH], lnk[MAX_PATH], dir[MAX_PATH];
     if (!a->link || !appsFindInstalledEx(a, ver, 64, exe) || !exe[0]) return;
@@ -1009,15 +1081,16 @@ static void appsIdmDriver(const AppDef* a);
 static DWORD appsInstall(int app, BOOL update) {
     const AppDef* a = &APPS[app];
     // a folder only administrators and SYSTEM can write, so a normal-rights program can't swap the installer
+    // (a per-user app runs as the signed-in user, with no more rights than that user: their own temp folder)
     wchar_t dir[MAX_PATH], path[MAX_PATH], url[600];
-    GetWindowsDirectoryW(dir, MAX_PATH);
-    swprintf(dir + wcslen(dir), MAX_PATH - wcslen(dir), L"\\Temp\\WCU_Apps_%lu_%llu", GetCurrentProcessId(), GetTickCount64());
+    if (a->perUser) GetTempPathW(MAX_PATH, dir); else { GetWindowsDirectoryW(dir, MAX_PATH); wcscat(dir, L"\\Temp\\"); }
+    swprintf(dir + wcslen(dir), MAX_PATH - wcslen(dir), L"WCU_Apps_%lu_%llu", GetCurrentProcessId(), GetTickCount64());
     SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, FALSE };
-    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)", SDDL_REVISION_1,
+    if (!a->perUser && !ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)", SDDL_REVISION_1,
                                                               &sa.lpSecurityDescriptor, NULL)) return APS_CODE(APS_FOLDER, GetLastError());
-    BOOL made = CreateDirectoryW(dir, &sa);
+    BOOL made = CreateDirectoryW(dir, a->perUser ? NULL : &sa);
     DWORD e = made ? 0 : GetLastError();
-    LocalFree(sa.lpSecurityDescriptor);
+    if (sa.lpSecurityDescriptor) LocalFree(sa.lpSecurityDescriptor);
     if (!made) { appsSay(L"Couldn't make the download folder (error %lu).", e); return APS_CODE(APS_FOLDER, e); }
     BOOL quick = app == APP_IDM && update;  // IDM updates with its own idmupdt.exe
     swprintf(path, MAX_PATH, L"%s\\%s", dir, quick ? L"idmupdt.exe" : a->fileName);
@@ -1070,7 +1143,10 @@ static DWORD appsInstall(int app, BOOL update) {
             }
         }
     }
-    if (!result) {
+    if (!result && !a->signer && !g_appsSha[0]) {    // an unsigned setup only with the publisher's hash checked above
+        result = APS_CODE(APS_SIGN, ERROR_INVALID_DATA);
+        appsSay(L"The publisher lists no SHA-256 for this file, and it isn't signed. Deleted it.");
+    } else if (!result && a->signer) {
         appsProgress(APP_STEP_SIGN, 0);
         HRESULT hr = appsCheckSigner(path, a->signer);
         if (hr != S_OK) { result = APS_CODE(APS_SIGN, (DWORD)hr & 0xFFFF); appsSay(L"Signature check failed (0x%08lX). Deleted the download.", (DWORD)hr); }
@@ -1122,8 +1198,10 @@ run:
         else if (!appsFindInstalled(a, ver, 64)) { result = APS_CODE(APS_MISSING, 0); appsSay(L"%s doesn't show as installed.", a->name); }
         else appsSay(L"Installed: %s %s.", a->name, ver);
         if (!result) {                      // no desktop shortcut; one in Programs, and no folder of its own
-            appsTidyShortcuts(a, TRUE);
-            appsPlaceShortcut(a);
+            // a per-user app runs in the window: its own places first; the all-users ones need administrator
+            // rights, so without them the shortcut helper does that part (appsLinksHelper)
+            if (a->perUser) appsTidyShortcuts(a, FALSE);
+            if (!a->perUser || g_elevated) { appsTidyShortcuts(a, TRUE); appsPlaceShortcut(a); }
             if (app == APP_IDM) appsIdmDriver(a);
         }
     }
@@ -1166,10 +1244,162 @@ static void appsIdmDriver(const AppDef* a) {
     CloseServiceHandle(scm);
 }
 
+// ---------- uninstalling ----------
+// The app's uninstall entry: its key name, its UninstallString, and whether Windows Installer manages it
+static BOOL appsFindEntry(const AppDef* a, wchar_t* key /* 256 */, wchar_t* uninst /* 1024 */, BOOL* msi) {
+    static const struct { HKEY root; REGSAM view; } WHERE[] = {
+        { HKEY_LOCAL_MACHINE, KEY_WOW64_64KEY }, { HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY }, { HKEY_CURRENT_USER, 0 } };
+    key[0] = uninst[0] = 0; *msi = FALSE;
+    if (!a->listed) return FALSE;
+    size_t pl = wcslen(a->listed);
+    for (int w = 0; w < 3; w++) {
+        HKEY k;
+        if (RegOpenKeyExW(WHERE[w].root, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", 0,
+                          KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE | WHERE[w].view, &k) != ERROR_SUCCESS) continue;
+        for (DWORD i = 0; ; i++) {
+            DWORD n = 256;
+            if (RegEnumKeyExW(k, i, key, &n, NULL, NULL, NULL, NULL) != ERROR_SUCCESS) break;
+            wchar_t name[256]; DWORD cb = sizeof(name), wi = 0, cw = sizeof(wi);
+            if (RegGetValueW(k, key, L"DisplayName", RRF_RT_REG_SZ, NULL, name, &cb) != ERROR_SUCCESS || _wcsnicmp(name, a->listed, pl)) continue;
+            cb = 1024 * sizeof(wchar_t);
+            if (RegGetValueW(k, key, L"UninstallString", RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, NULL, uninst, &cb) != ERROR_SUCCESS) uninst[0] = 0;
+            *msi = RegGetValueW(k, key, L"WindowsInstaller", RRF_RT_REG_DWORD, NULL, &wi, &cw) == ERROR_SUCCESS && wi == 1;
+            RegCloseKey(k);
+            return TRUE;
+        }
+        RegCloseKey(k);
+    }
+    key[0] = 0;
+    return FALSE;
+}
+
+// Runs a program hidden and waits for it and everything it starts: an NSIS uninstaller copies itself to %TEMP%, starts
+// that copy and exits at once. Returns the first program's exit code, or a Windows error.
+static DWORD appsRunTree(const wchar_t* exe, wchar_t* cmd, const wchar_t* cwd) {
+    HANDLE job = CreateJobObjectW(NULL, NULL);
+    STARTUPINFOW si = { sizeof(si) }; PROCESS_INFORMATION pi;
+    si.dwFlags = STARTF_USESHOWWINDOW; si.wShowWindow = SW_HIDE;
+    if (!CreateProcessW(exe, cmd, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, cwd, &si, &pi)) { DWORD e = GetLastError(); if (job) CloseHandle(job); return e; }
+    if (job) AssignProcessToJobObject(job, pi.hProcess);
+    ResumeThread(pi.hThread);
+    CloseHandle(pi.hThread);
+    DWORD code = 0;
+    if (WaitForSingleObject(pi.hProcess, 15 * 60 * 1000) == WAIT_TIMEOUT) code = WAIT_TIMEOUT;
+    else GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hProcess);
+    ULONGLONG until = GetTickCount64() + 15 * 60 * 1000;
+    while (job && GetTickCount64() < until) {           // the copies it started
+        JOBOBJECT_BASIC_ACCOUNTING_INFORMATION ai;
+        if (!QueryInformationJobObject(job, JobObjectBasicAccountingInformation, &ai, sizeof(ai), NULL) || !ai.ActiveProcesses) break;
+        Sleep(300);
+    }
+    if (job) CloseHandle(job);
+    return code;
+}
+
+// Our shortcut in the all-users Programs, once the app is gone
+static void appsDropOurLink(const AppDef* a) {
+    wchar_t lnk[MAX_PATH];
+    if (appsLinkPath(a, lnk) && isFile(lnk) && DeleteFileW(lnk)) appsSay(L"Removed Start menu shortcut: Programs\\%s.lnk", a->link);
+}
+
+static DWORD appsUninstall(int app) {
+    const AppDef* a = &APPS[app];
+    wchar_t ver[64], key[256], uninst[1024], cmd[MAX_PATH * 2 + 1200], runner[MAX_PATH];
+    BOOL msi = FALSE;
+    DWORD code = 0;
+    appsProgress(APP_STEP_UNINSTALL, 0);
+    if (!appsFindInstalled(a, ver, 64)) { appsSay(L"%s isn't installed.", a->name); return APS_CODE(APS_MISSING, 0); }
+    if (a->kind == KIND_MSIX) {                          // for the signed-in user, as it was installed
+        wchar_t pkg[100];
+        lstrcpynW(pkg, a->package, 100);
+        size_t n = wcslen(pkg);
+        if (n && pkg[n - 1] == L'_') pkg[n - 1] = 0;
+        GetSystemDirectoryW(runner, MAX_PATH);
+        wcscat(runner, L"\\WindowsPowerShell\\v1.0\\powershell.exe");
+        swprintf(cmd, MAX_PATH * 2 + 1200, L"\"%s\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$ProgressPreference='SilentlyContinue'; "
+                 L"try { Get-AppxPackage -Name '%s' | Remove-AppxPackage -ErrorAction Stop; exit 0 } catch { Write-Output $_.Exception.Message; exit 1 }\"",
+                 runner, pkg);
+        appsSay(L"Removing the package (Remove-AppxPackage %s)…", pkg);
+        code = appsRunLogged(runner, cmd);
+    } else {
+        if (!appsFindEntry(a, key, uninst, &msi)) { appsSay(L"Couldn't find %s's uninstall entry.", a->name); return APS_CODE(APS_MISSING, 0); }
+        if (msi && key[0] == L'{') {
+            systemPath(runner, L"msiexec.exe");
+            swprintf(cmd, MAX_PATH * 2 + 1200, L"\"%s\" /x %s /qn /norestart", runner, key);
+            appsSay(L"Running: msiexec /x %s /qn /norestart", key);
+            code = appsRunTree(runner, cmd, NULL);
+            if (code == ERROR_SUCCESS_REBOOT_REQUIRED) { appsSay(L"Windows Installer says a restart finishes it."); code = 0; }
+        } else {
+            // its program, quoted or not, from the uninstall string; then the silent switch for this uninstaller
+            const wchar_t* s = uninst;
+            int n = 0;
+            if (*s == L'"') { s++; while (s[n] && s[n] != L'"' && n < MAX_PATH - 1) n++; }
+            else { const wchar_t* e = wcsstr(s, L".exe"); if (!e) e = wcsstr(s, L".EXE"); n = e ? (int)(e - s) + 4 : (int)wcslen(s); }
+            if (n <= 0 || n >= MAX_PATH) n = 0;
+            wmemcpy(runner, s, n); runner[n] = 0;
+            if (!n || !isFile(runner) || !APPS_UNINST[app]) { appsSay(L"Couldn't find %s's uninstaller (%s).", a->name, uninst); return APS_CODE(APS_UNINSTALL, ERROR_FILE_NOT_FOUND); }
+            wchar_t cwd[MAX_PATH];
+            lstrcpynW(cwd, runner, MAX_PATH); PathRemoveFileSpecW(cwd);
+            swprintf(cmd, MAX_PATH * 2 + 1200, L"\"%s\" %s", runner, APPS_UNINST[app]);
+            appsSay(L"Running: %s %s", runner, APPS_UNINST[app]);
+            code = appsRunTree(runner, cmd, cwd);
+        }
+    }
+    appsSay(L"Uninstaller finished, exit code %lu.", code);
+    if (appsFindInstalled(a, ver, 64)) {
+        appsSay(L"%s still shows as installed (%s).", a->name, ver);
+        return APS_CODE(code ? APS_UNINSTALL : APS_STILL, code);
+    }
+    appsSay(L"Uninstalled: %s.", a->name);
+    if (!a->perUser || g_elevated) appsDropOurLink(a);
+    if (app == APP_IDM) {                                // the network driver this app added for it
+        SC_HANDLE scm = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
+        SC_HANDLE sv = scm ? OpenServiceW(scm, L"IDMWFP", SERVICE_STOP | DELETE) : NULL;
+        if (sv) {
+            SERVICE_STATUS st;
+            ControlService(sv, SERVICE_CONTROL_STOP, &st);
+            if (DeleteService(sv)) appsSay(L"Removed IDM's network driver service (IDMWFP).");
+            wchar_t sys[MAX_PATH];
+            GetSystemDirectoryW(sys, MAX_PATH);
+            PathAppendW(sys, L"drivers\\idmwfp.sys");
+            if (isFile(sys) && !DeleteFileW(sys)) MoveFileExW(sys, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+            CloseServiceHandle(sv);
+        }
+        if (scm) CloseServiceHandle(scm);
+    }
+    return 0;
+}
+
+// The shortcut helper for a per-user app when the window has no administrator rights: started (with UAC) before the
+// job, it waits until the window's install or uninstall is done (--after=<event>), then sorts out the all-users places:
+// no desktop shortcut, one in Programs while the app is installed, none once it's gone.
+static int appsLinksHelper(const wchar_t* cmd) {
+    int app = _wtoi(cmd + 13);                 // --apps-links=N
+    if (app < 0 || app >= APP_COUNT || !APPS[app].perUser) return ERROR_INVALID_PARAMETER;
+    g_appsNotify = cmdNotify(cmd);
+    const wchar_t* ev = wcsstr(cmd, L"--after=");
+    wchar_t name[96] = L"";
+    if (ev) { int n = 0; for (ev += 8; *ev && *ev != L' ' && n < 95; ev++) name[n++] = *ev; name[n] = 0; }
+    HANDLE h = name[0] ? OpenEventW(SYNCHRONIZE, FALSE, name) : NULL;
+    if (!h) return ERROR_INVALID_PARAMETER;
+    DWORD w = WaitForSingleObject(h, 60 * 60 * 1000);
+    CloseHandle(h);
+    if (w != WAIT_OBJECT_0) return WAIT_TIMEOUT;
+    HRESULT co = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    const AppDef* a = &APPS[app];
+    wchar_t ver[64];
+    if (appsFindInstalled(a, ver, 64)) { appsTidyShortcuts(a, TRUE); appsPlaceShortcut(a); }
+    else appsDropOurLink(a);
+    if (SUCCEEDED(co)) CoUninitialize();
+    return 0;
+}
+
 static int appsHelperMain(const wchar_t* cmd) {
     int app = _wtoi(cmd + 15);                 // --apps-install=N
     if (app < 0 || app >= APP_COUNT) return (int)APS_CODE(APS_INSTALL, ERROR_INVALID_PARAMETER);
     g_appsNotify = cmdNotify(cmd);
+    if (wcsstr(cmd, L" --uninstall")) return (int)appsUninstall(app);
     return (int)appsInstall(app, wcsstr(cmd, L" --update") != NULL);
 }
 
@@ -1257,6 +1487,7 @@ static wchar_t g_appsLatest[APP_COUNT][64];   // newest offered, empty if unknow
 static volatile LONG g_appsChecking = 0;
 static ULONGLONG g_appsCheckedAt = 0;
 static BOOL g_appsUpdating = FALSE;           // the job running is an update
+static BOOL g_appsUninstalling = FALSE;       // ...or an uninstall
 static BOOL g_appsWasThere = FALSE;           // the app was installed before this job
 
 static DWORD WINAPI appsLatestProc(LPVOID arg) {
@@ -1302,8 +1533,8 @@ static DWORD WINAPI appsProc(LPVOID arg) {
     DWORD fin = 0;
     g_appsWhat = NULL; g_appsExt[0] = 0;
     // the shortcuts the installer also made for this user (done here, as the signed-in user)
-    if (!code) appsTidyShortcuts(&APPS[j->app], FALSE);
-    if (!code && !j->update) {          // an update keeps the settings and defaults already there
+    if (!code && !g_appsUninstalling) appsTidyShortcuts(&APPS[j->app], FALSE);
+    if (!code && !j->update && !g_appsUninstalling) {          // an update keeps the settings and defaults already there
         if (j->app == APP_POT) {
             PostMessageW(g_hwnd, WM_APP_APPSPROG, APP_STEP_SETTINGS, 0);
             g_appsWhat = L"apply PotPlayer's settings";
@@ -1415,7 +1646,7 @@ static void appsStoreStart(int app) {
              app == APP_NANAZIP ? L", and makes it the default for ZIP, RAR and 7Z files. ISO files stay with Windows Explorer" : L"");
     if (!showDialog(g_hwnd, title, body, NULL, 0, L"Install", L"Cancel", 1)) return;    // no UAC here, so this is the one prompt
     if (!jobBegin()) return;
-    g_appsUpdating = FALSE;
+    g_appsUpdating = FALSE; g_appsUninstalling = FALSE;
     g_appsWasThere = g_appsVer[app][0] != 0;
     g_appsRun = app; g_appsStep = APP_STEP_INSTALL; g_appsMb = 0; g_appsMsg[0] = 0;
     if (g_appsLogN) appsLogAdd(L"", FALSE);
@@ -1426,24 +1657,76 @@ static void appsStoreStart(int app) {
     InvalidateRect(g_hwnd, NULL, FALSE);
 }
 
-static void appsStart(int app, BOOL update) {
+// ---------- in the window's process, as the signed-in user ----------
+// A per-user app's setup installs into the user's own AppData and HKCU, so it must run as them, not in the administrator
+// helper (which could be another account's); a packaged app is removed for the signed-in user too. The same steps as
+// the helper's. Only the all-users shortcut needs administrator rights: without them, the shortcut helper started
+// before the job (its UAC prompt is the confirmation) does that part once the job signals it's done.
+typedef struct { int app, mode; HANDLE links, done; } AppsUserJob;
+enum { APPS_INSTALL, APPS_UPDATE, APPS_UNINSTALL };
+static DWORD WINAPI appsUserProc(LPVOID arg) {
+    AppsUserJob* j = (AppsUserJob*)arg;
+    g_appsWhat = NULL; g_appsExt[0] = 0;
+    HRESULT co = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    DWORD code = j->mode == APPS_UNINSTALL ? appsUninstall(j->app) : appsInstall(j->app, j->mode == APPS_UPDATE);
+    if (SUCCEEDED(co)) CoUninitialize();
+    if (j->links) {                         // the shortcut helper's turn; its lines go to the log while this job runs
+        SetEvent(j->done);
+        if (WaitForSingleObject(j->links, 5 * 60 * 1000) == WAIT_TIMEOUT) appsSay(L"The shortcut helper didn't finish.");
+        CloseHandle(j->links);
+    }
+    if (j->done) CloseHandle(j->done);
+    free(j);
+    g_appsCode = code;
+    PostMessageW(g_hwnd, WM_APP_APPSDONE, 0, 0);
+    return 0;
+}
+
+static void appsJobHead(int app, int mode, BOOL reinstall) {
+    const AppDef* a = &APPS[app];
+    g_appsUpdating = mode == APPS_UPDATE;
+    g_appsUninstalling = mode == APPS_UNINSTALL;
+    g_appsWasThere = g_appsVer[app][0] != 0;
+    g_appsRun = app; g_appsStep = mode == APPS_UNINSTALL ? APP_STEP_UNINSTALL : APP_STEP_LINK; g_appsMb = 0; g_appsMsg[0] = 0;
+    if (g_appsLogN) appsLogAdd(L"", FALSE);
+    wchar_t head[200];
+    if (mode == APPS_UPDATE) swprintf(head, 200, L"> Update %s %s -> %s", a->name, g_appsVer[app], g_appsLatest[app]);
+    else if (mode == APPS_UNINSTALL) swprintf(head, 200, L"> Uninstall %s %s", a->name, g_appsVer[app]);
+    else swprintf(head, 200, reinstall ? L"> Reinstall %s (full setup)" : g_appsWasThere ? L"> Reinstall %s" : L"> Install %s", a->name);
+    appsLogAdd(head, FALSE);
+}
+
+static void appsStart(int app, int mode) {
     if (g_busy != 0 || app < 0 || app >= APP_COUNT) return;
     const AppDef* a = &APPS[app];
-    if (a->storeId) { appsStoreStart(app); return; }
-    BOOL reinstall = !update && app == APP_IDM && g_appsVer[app][0];    // IDM's full setup over the copy there
+    BOOL update = mode == APPS_UPDATE, un = mode == APPS_UNINSTALL;
+    if (a->storeId && !un) { appsStoreStart(app); return; }
+    BOOL reinstall = mode == APPS_INSTALL && app == APP_IDM && g_appsVer[app][0];    // IDM's full setup over the copy there
     DWORD pids[4];
     if (a->closeFirst && appsPids(a->exe, pids, 4)) {
         wchar_t title[80], body[300];
         swprintf(title, 80, L"Close %s first", a->name);
-        swprintf(body, 300, app == APP_IDM
+        swprintf(body, 300, app == APP_IDM || app == APP_ABDM
             ? L"%s is running. It may only show in the notification area: right-click its icon and choose Exit. Then press %s again."
-            : L"%s is open. Close it, then press %s again.", a->name, update ? L"Update" : reinstall ? L"Reinstall IDM" : a->label);
+            : L"%s is open. Close it, then press %s again.", a->name,
+            un ? L"\x00D7" : update ? L"Update" : reinstall ? L"Reinstall IDM" : a->label);
         okDialog(title, body);
         return;
     }
-    if (!update && askInApp()) {            // Update starts at once (user's choice); install and reinstall ask first
+    // where it runs, and whether a UAC prompt comes (which is then the confirmation)
+    BOOL inProc = a->perUser || (un && a->kind == KIND_MSIX);
+    wchar_t lnk[MAX_PATH];
+    BOOL linkThere = appsLinkPath(a, lnk) && isFile(lnk);
+    BOOL needLinks = a->perUser && !g_elevated && a->link && (un ? linkThere : !linkThere);
+    BOOL uacConfirms = (inProc ? needLinks : TRUE) && !askInApp();
+    if (!update && !uacConfirms) {          // Update starts at once (user's choice); the rest ask first
         wchar_t title[80], body[400];
-        if (reinstall) {
+        if (un) {
+            swprintf(title, 80, L"Uninstall %s?", a->name);
+            swprintf(body, 400, L"This removes %s %s from this PC with its own uninstaller, silently.%s", a->name, g_appsVer[app],
+                     app == APP_CRD ? L" If you're connected to this PC through it right now, the connection ends." :
+                     app == APP_TAILSCALE ? L" If you reach this PC through Tailscale right now, the connection ends." : L"");
+        } else if (reinstall) {
             swprintf(title, 80, L"Reinstall %s?", a->name);
             swprintf(body, 400, L"This downloads the full setup of the newest %s from its publisher and installs it silently over %s. "
                      L"Its settings are kept. Afterwards you can import your own settings from a .reg file.", a->name, g_appsVer[app]);
@@ -1452,22 +1735,53 @@ static void appsStart(int app, BOOL update) {
             if (app == APP_POT)
                 swprintf(body, 400, L"This downloads the newest %s, installs it silently, applies the settings built into this app "
                          L"(replacing its current settings), and makes it the default for MP4, MKV, MPG, MPEG and WMV files.", a->name);
-            else if (app == APP_NANAZIP)
-                swprintf(body, 400, L"This downloads the newest %s, installs it silently, and makes it the default for ZIP, RAR and 7Z files.", a->name);
             else if (app == APP_IDM)
                 swprintf(body, 400, L"This downloads the newest %s from its publisher and installs it silently. "
                          L"Afterwards you can import your own settings from a .reg file.", a->name);
+            else if (a->ghRepo)
+                swprintf(body, 400, L"This downloads the newest %s from its GitHub releases, checks it against the SHA-256 GitHub lists, "
+                         L"and installs it silently%s.", a->name, a->perUser ? L" for your account" : L"");
             else swprintf(body, 400, L"This downloads the newest %s from its publisher and installs it silently.", a->name);
         }
-        if (!showDialog(g_hwnd, title, body, NULL, 0, reinstall ? L"Reinstall" : L"Install", L"Cancel", 1)) return;
+        if (!showDialog(g_hwnd, title, body, NULL, 0, un ? L"Uninstall" : reinstall ? L"Reinstall" : L"Install", L"Cancel", 1)) return;
     }
-    wchar_t args[32]; BOOL cancelled = FALSE;
-    swprintf(args, 32, L"--apps-install=%d%s", app, update ? L" --update" : L"");
+    const wchar_t* nothing = un ? L"Nothing was removed." : L"Nothing was installed.";
+    if (inProc) {
+        AppsUserJob* u = (AppsUserJob*)calloc(1, sizeof(AppsUserJob));
+        if (!u) return;
+        u->app = app; u->mode = mode;
+        if (needLinks) {
+            wchar_t ev[96], args[160]; BOOL cancelled = FALSE;
+            swprintf(ev, 96, L"Local\\WCU_AppsLinks_%lu_%llu", GetCurrentProcessId(), GetTickCount64());
+            u->done = CreateEventW(NULL, TRUE, FALSE, ev);
+            swprintf(args, 160, L"--apps-links=%d --after=%s", app, ev);
+            if (!u->done || !startElevatedHelper(args, &u->links, &cancelled)) {
+                swprintf(g_appsMsg, 400, L"%s %s", cancelled ? L"Cancelled." : L"Couldn't start the administrator helper for the Start menu shortcut.", nothing);
+                appsLogAdd(g_appsMsg, FALSE);
+                if (u->done) CloseHandle(u->done);
+                free(u);
+                InvalidateRect(g_hwnd, NULL, FALSE);
+                return;
+            }
+        }
+        if (!jobBegin()) {                  // (the helper just sorts the shortcut out as things are)
+            if (u->done) { SetEvent(u->done); CloseHandle(u->done); }
+            if (u->links) CloseHandle(u->links);
+            free(u);
+            return;
+        }
+        appsJobHead(app, mode, FALSE);
+        startWorker(appsUserProc, u);
+        InvalidateRect(g_hwnd, NULL, FALSE);
+        return;
+    }
+    wchar_t args[40]; BOOL cancelled = FALSE;
+    swprintf(args, 40, L"--apps-install=%d%s", app, update ? L" --update" : un ? L" --uninstall" : L"");
     HANDLE helper = NULL;
     if (g_elevated) helper = startHelperDirect(args);
     else if (!startElevatedHelper(args, &helper, &cancelled)) helper = NULL;
     if (!helper) {
-        wcscpy(g_appsMsg, cancelled ? L"Cancelled. Nothing was installed." : L"Couldn't start the administrator helper. Nothing was installed.");
+        swprintf(g_appsMsg, 400, L"%s %s", cancelled ? L"Cancelled." : L"Couldn't start the administrator helper.", nothing);
         appsLogAdd(g_appsMsg, FALSE);
         InvalidateRect(g_hwnd, NULL, FALSE);
         return;
@@ -1479,20 +1793,14 @@ static void appsStart(int app, BOOL update) {
         return;
     }
     j->helper = helper; j->app = app; j->update = update;
-    g_appsUpdating = update;
-    g_appsWasThere = g_appsVer[app][0] != 0;
-    g_appsRun = app; g_appsStep = APP_STEP_LINK; g_appsMb = 0; g_appsMsg[0] = 0;
-    if (g_appsLogN) appsLogAdd(L"", FALSE);
-    wchar_t head[200];
-    if (update) swprintf(head, 200, L"> Update %s %s -> %s", a->name, g_appsVer[app], g_appsLatest[app]);
-    else swprintf(head, 200, reinstall ? L"> Reinstall %s (full setup)" : L"> Install %s", a->name);
-    appsLogAdd(head, FALSE);
+    appsJobHead(app, mode, reinstall);
     startWorker(appsProc, j);
     InvalidateRect(g_hwnd, NULL, FALSE);
 }
 
-static void appsClick(int app) { appsStart(app, FALSE); }
-static void appsUpdateClick(int app) { if (app >= 0 && app < APP_COUNT && appsHasUpdate(app)) appsStart(app, TRUE); }
+static void appsClick(int app) { appsStart(app, APPS_INSTALL); }
+static void appsUpdateClick(int app) { if (app >= 0 && app < APP_COUNT && appsHasUpdate(app)) appsStart(app, APPS_UPDATE); }
+static void appsUninstallClick(int app) { if (app >= 0 && app < APP_COUNT && g_appsVer[app][0]) appsStart(app, APPS_UNINSTALL); }
 
 static void appsOnProgress(int step, int mb) {
     if (g_appsRun < 0) return;
@@ -1510,6 +1818,16 @@ static void appsOnDone(DWORD fin) {
     if (app < 0) return;
     const AppDef* a = &APPS[app];
     DWORD step = code >> 24, detail = code & 0xFFFFFF;
+    if (g_appsUninstalling) {
+        if (code == 0) swprintf(g_appsMsg, 400, L"%s is uninstalled.", a->name);
+        else if (step == APS_MISSING) swprintf(g_appsMsg, 400, L"%s isn't installed, so there was nothing to remove.", a->name);
+        else if (step == APS_STILL) swprintf(g_appsMsg, 400, L"%s's uninstaller finished, but %s still shows as installed.", a->name, a->name);
+        else swprintf(g_appsMsg, 400, L"%s's uninstaller stopped with code %lu. See the lines above.", a->name, detail);
+        appsLogAdd(g_appsMsg, FALSE);
+        g_appsUninstalling = FALSE;
+        InvalidateRect(g_hwnd, NULL, FALSE);
+        return;
+    }
     if (code == 0 && fin == 0 && g_appsUpdating) {
         if (g_appsLatest[app][0] && appsVerCmp(g_appsVer[app], g_appsLatest[app]) < 0)
             swprintf(g_appsMsg, 400, a->kind == KIND_MSIX
@@ -1549,7 +1867,7 @@ static void appsOnDone(DWORD fin) {
     else if (step == APS_SIGN && detail == ERROR_INVALID_DATA)
         swprintf(g_appsMsg, 400, L"The downloaded %s installer didn't match the SHA-256 its publisher lists, so it was deleted and nothing was installed.", a->name);
     else if (step == APS_SIGN)
-        swprintf(g_appsMsg, 400, L"The downloaded %s installer isn't signed by %s, so it was deleted and nothing was installed.", a->name, a->signer);
+        swprintf(g_appsMsg, 400, L"The downloaded %s installer isn't signed by %s, so it was deleted and nothing was installed.", a->name, a->signer ? a->signer : L"its publisher");
     else if (step == APS_MISSING)
         swprintf(g_appsMsg, 400, L"The %s installer finished, but %s doesn't show as installed.", a->name, a->name);
     else if (step == APS_FOLDER)
@@ -1645,50 +1963,119 @@ static void appsIdmOfferReg(void) {
 
 // ---------- the page ----------
 static void appsDrawLog(int cL, int cR, int oTop, const wchar_t* now);
+static int g_appsPage = 0;               // the section shown: Page 1 (0) or Page 2 (1)
+
+// The rows a section shows: its apps, and on Page 1 the GPU driver rows too
+static int appsPageRows(int page) {
+    int n = page == 0 ? GPU_N : 0;
+    for (int i = 0; i < APP_COUNT; i++) if (APPS[i].page == page) n++;
+    return n;
+}
+
+// Page 1 / Page 2 tabs at the card's top right, styled like the Windows AIO tool tabs
+static void appsDrawPager(int cR, int top) {
+    int tw = dp(76), th = dp(32), r = cR - dp(20), t = top + dp(28);
+    int l = r - tw * APPS_PAGES;
+    Col sf = hoverCol();
+    fillRoundRect(l, t, r, t + th, dp(6), sf.r, sf.g, sf.b, sf.a * 0.8);
+    for (int p = 0; p < APPS_PAGES; p++) {
+        int a = l + tw * p, b = a + tw, id = A_P_PAGE0 + p;
+        RECT rc = { a, t, b, t + th };
+        aioRegister(id, rc, NULL, 0, FALSE);
+        double sv = anim(ANIM_AIOF + id, p == g_appsPage);       // the field-focus slot: these ids are no text fields
+        double hv = anim(ANIM_AIO + id, g_hotBtn == BTN_WIDGET + id && p != g_appsPage);
+        fillHover(a + dp(3), t + dp(3), b - dp(3), t + th - dp(3), dp(4), hv);
+        if (sv > 0) {
+            Col h = hoverCol();
+            fillRoundRect(a + dp(3), t + dp(3), b - dp(3), t + th - dp(3), dp(4), h.r, h.g, h.b, h.a * 2.4 * sv);
+            int bw = (b - a) / 3, bx = (a + b - bw) / 2;
+            fillAccent(bx, t + th - dp(5), bx + bw, t + th - dp(2), dp(1), sv);
+        }
+        wchar_t lbl[24];
+        swprintf(lbl, 24, L"Page %d", p + 1);
+        drawText(g_fSmall, lbl, rc, textRGB(), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        BOOL upd = FALSE;                // a dot when an app in another section has an update
+        for (int i = 0; i < APP_COUNT; i++) if (APPS[i].page == p && p != g_appsPage && appsHasUpdate(i)) upd = TRUE;
+        if (upd) {
+            int dx = (a + b + textWidth(g_fSmall, lbl)) / 2 + dp(4), dy = t + th / 2 - dp(6);
+            fillAccent(dx, dy, dx + dp(6), dy + dp(6), dp(3), 1.0);
+        }
+    }
+}
+static void appsPageClick(int p) {
+    if (p < 0 || p >= APPS_PAGES || p == g_appsPage) return;
+    g_appsPage = p;
+    InvalidateRect(g_hwnd, NULL, FALSE);
+}
+
+// The small red × that uninstalls an app: red glyph, a faint red face that deepens on hover
+static void appsDrawRemove(int id, int l, int t, int r, int b, BOOL en) {
+    RECT rc = { l, t, r, b };
+    if (en) aioRegister(id, rc, NULL, 0, FALSE);
+    double hv = anim(ANIM_AIO + id, g_hotBtn == BTN_WIDGET + id && en);
+    int R = g_dark ? 255 : 196, G = g_dark ? 153 : 43, B = g_dark ? 164 : 28;
+    fillRoundRect(l, t, r, b, dp(4), R, G, B, (en ? 0.10 : 0.04) + 0.16 * hv);
+    drawGlyph(g_fIcon, 0xE711, (l + r) / 2, (t + b) / 2, en ? RGB(R, G, B) : mutedRGB());
+}
+
 static void drawApps(int cL, int cR) {
     int pad = dp(16), top = pad;
     Col sf = surfaceCol();
     int x1 = cL + dp(20), x2 = cR - dp(20), bh = dp(30), bw = dp(172), rowGap = dp(6);   // compact, so the log below has room
     int noteH = dp(56);
-    int cardB = top + dp(92) + (APP_COUNT + GPU_N) * (bh + rowGap) + dp(4) + noteH + dp(8);
+    int most = 0;                        // the card keeps the size of the fullest section, so the log doesn't move
+    for (int p = 0; p < APPS_PAGES; p++) if (appsPageRows(p) > most) most = appsPageRows(p);
+    int cardB = top + dp(92) + most * (bh + rowGap) + dp(4) + noteH + dp(8);
     fillRoundRect(cL, top, cR, cardB, dp(8), sf.r, sf.g, sf.b, sf.a);
     drawPageHeader(0xE71D, cL, cR, top, L"Install Apps", L"The newest build of each app, installed silently.");
+    appsDrawPager(cR, top);
 
     int y = top + dp(92);
     BOOL en = g_busy == 0, shield = !g_elevated;
     g_aioSmall = TRUE;                   // every button here in the smaller font, so the rows look even
-    static const int IDS[APP_COUNT] = { A_P_FIREFOX, A_P_IDM, A_P_POT, A_P_CRD, A_P_NANAZIP, A_P_TAILSCALE };
+    static const int IDS[APP_COUNT] = { A_P_FIREFOX, A_P_IDM, A_P_POT, A_P_CRD, A_P_NANAZIP, A_P_TAILSCALE, A_P_ABDM, A_P_CRAFT };
     for (int i = 0; i < APP_COUNT; i++) {
+        if (APPS[i].page != g_appsPage) continue;
         // IDM installed: its button reinstalls with the full setup (Update uses IDM's own smaller update)
         const wchar_t* lbl = i == APP_IDM && g_appsVer[i][0] ? L"Reinstall IDM" : APPS[i].label;
-        aioButton(IDS[i], x1, y, x1 + bw, y + bh, lbl, FALSE, en, shield && !APPS[i].storeId);
+        aioButton(IDS[i], x1, y, x1 + bw, y + bh, lbl, FALSE, en, shield && !APPS[i].storeId && !APPS[i].perUser);
         wchar_t st[160];
         BOOL upd = g_appsRun != i && appsHasUpdate(i);
-        if (g_appsRun == i) wcscpy(st, g_appsUpdating ? L"Updating…" : L"Installing…");
+        if (g_appsRun == i) wcscpy(st, g_appsUninstalling ? L"Uninstalling…" : g_appsUpdating ? L"Updating…" : L"Installing…");
         else if (APPS[i].storeId && g_appsVer[i][0]) swprintf(st, 160, L"Installed: %s · the Microsoft Store keeps it updated", g_appsVer[i]);
         else if (APPS[i].storeId) wcscpy(st, L"Not installed · from the Microsoft Store");
         else if (upd) swprintf(st, 160, L"Installed: %s · %s available", g_appsVer[i], g_appsLatest[i]);
         else if (g_appsVer[i][0] && g_appsLatest[i][0] && iswdigit(g_appsVer[i][0])) swprintf(st, 160, L"Installed: %s (latest)", g_appsVer[i]);
         else if (g_appsVer[i][0]) swprintf(st, 160, L"Installed: %s%s", g_appsVer[i], g_appsChecking ? L" · checking for updates…" : L"");
         else wcscpy(st, L"Not installed");
-        // a small Update button at the row's right end, only when a newer version is offered
-        int ubw = dp(68), ubh = dp(24), textR = x2;
+        // at the row's right end: a small red × that uninstalls it, when it's installed, and left of it a small Update
+        // button, only when a newer version is offered
+        int ubw = dp(68), ubh = dp(24), textR = x2, right = x2;
+        if (g_appsVer[i][0] && g_appsRun != i) {
+            int uy = y + (bh - ubh) / 2;
+            appsDrawRemove(A_P_DEL0 + i, right - ubh, uy, right, uy + ubh, en);
+            right -= ubh + dp(8);
+            textR = right - dp(2);
+        }
         if (upd) {
             int uy = y + (bh - ubh) / 2;
-            aioButton(A_P_UPD0 + i, x2 - ubw, uy, x2, uy + ubh, L"Update", TRUE, en, FALSE);
-            textR = x2 - ubw - dp(10);
+            aioButton(A_P_UPD0 + i, right - ubw, uy, right, uy + ubh, L"Update", TRUE, en, FALSE);
+            textR = right - ubw - dp(10);
         }
         RECT r = { x1 + bw + dp(14), y, textR, y + bh };
         drawText(g_fSmall, st, r, upd ? textRGB() : mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
         y += bh + rowGap;
     }
-    gpuDrawRows(x1, x2, bw, bh, rowGap, &y);
+    if (g_appsPage == 0) gpuDrawRows(x1, x2, bw, bh, rowGap, &y);
     g_aioSmall = FALSE;
-    y += dp(4);
+    y = top + dp(92) + most * (bh + rowGap) + dp(4);     // the note sits at the card's foot on every section
     RECT n1 = { x1, y, x2, y + noteH };
-    drawText(g_fSmall, L"Installed silently from the publisher, signature checked, with one shortcut in Start Menu and none on the desktop. "
-                       L"Pot Player gets this app's settings and opens MP4, MKV, MPG, MPEG and WMV. NanaZip comes from the "
-                       L"Microsoft Store, which updates it, and opens ZIP, RAR and 7Z.",
+    drawText(g_fSmall, g_appsPage == 0
+             ? L"Installed silently from the publisher, signature checked, with one shortcut in Start Menu and none on the desktop. "
+               L"Pot Player gets this app's settings and opens MP4, MKV, MPG, MPEG and WMV. NanaZip comes from the "
+               L"Microsoft Store, which updates it, and opens ZIP, RAR and 7Z."
+             : L"Installed silently from the publisher's GitHub releases, checked against the SHA-256 GitHub lists, with one shortcut "
+               L"in Start Menu and none on the desktop. These two install for your account only. The red \x00D7 on a row uninstalls that app.",
              n1, mutedRGB(), DT_LEFT | DT_WORDBREAK);
 
     wchar_t now[200] = L"";
@@ -1701,6 +2088,7 @@ static void drawApps(int cL, int cR) {
         case APP_STEP_SIGN:     swprintf(now, 200, L"%s: checking the signature…", name); break;
         case APP_STEP_INSTALL:  swprintf(now, 200, L"%s: installing…", name); break;
         case APP_STEP_CLOSE:    swprintf(now, 200, L"%s: finishing…", name); break;
+        case APP_STEP_UNINSTALL: swprintf(now, 200, L"%s: uninstalling…", name); break;
         default:                swprintf(now, 200, L"%s: setting default apps…", name); break;
         }
     }

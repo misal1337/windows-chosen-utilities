@@ -1,4 +1,4 @@
-# Windows Chosen Utilities v1.12
+# Windows Chosen Utilities v1.13
 
 [![Download](https://img.shields.io/badge/Download-exe-0078D4?style=for-the-badge)](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 [![Latest release](https://img.shields.io/github/v/release/misal1337/windows-chosen-utilities?style=for-the-badge&label=version)](https://github.com/misal1337/windows-chosen-utilities/releases)
@@ -54,7 +54,9 @@ and run it. Nothing is installed.
 - **Download Windows**: builds a bootable x64 or Arm64 ISO from Microsoft's files via UUP dump, with the
   editions, language and preinstalled apps you choose, in Documents or a work folder you pick.
 - **Install Apps**: silent installs and updates of Firefox, IDM, PotPlayer, Chrome Remote Desktop, NanaZip and
-  Tailscale, with signature checks and tidy Start menu shortcuts. **Download NVIDIA driver** and **Download AMD
+  Tailscale on Page 1, and AB Download Manager and ArtCraft Launcher (from their GitHub releases, SHA-256 checked)
+  on Page 2, with signature checks and tidy Start menu shortcuts. The red × on a row uninstalls that app silently
+  with its own uninstaller. **Download NVIDIA driver** and **Download AMD
   driver** find the newest driver for the graphics in this PC (desktop or laptop) and save it where you choose,
   without installing it: NVIDIA's Game Ready Driver, or a newer hotfix when there is one; AMD's Recommended driver,
   or a newer Optional one.
@@ -93,7 +95,8 @@ own privacy policies apply:
 - **Windows AIO → ESD to ISO:** GitHub, to fetch abbodi1406's [esd-decrypter-wimlib](https://github.com/abbodi1406/BatUtil).
 - **MS Office 365:** Microsoft's Office CDN. Opening this page checks it for the newest builds.
 - **Install Apps:** the publishers' download servers (Mozilla, Internet Download Manager, PotPlayer/Kakao, Google,
-  Tailscale) and the Microsoft Store for NanaZip. Opening this page checks those servers for the newest versions.
+  Tailscale), GitHub for AB Download Manager and ArtCraft Launcher, and the Microsoft Store for NanaZip.
+  Opening this page checks those servers for the newest versions.
   The driver buttons ask NVIDIA's driver lookup and download server, or amd.com, only when pressed; the graphics
   card's model name is part of that question.
 
@@ -116,6 +119,9 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
 ## Changelog
 Highlights only. Every release's full notes are on the [Releases page](https://github.com/misal1337/windows-chosen-utilities/releases).
 
+- **v1.13** (unreleased): Install Apps gets pages: Page 2 adds AB Download Manager and ArtCraft Launcher, installed
+  for your account from their GitHub releases and checked against GitHub's SHA-256. Every installed app gets a small
+  red × that uninstalls it silently.
 - **v1.12** (27 Nov 2026): the app updates itself: an Update button in the rail and a Windows notification when a
   newer release is out, with what's new before it updates. Install Apps downloads the newest NVIDIA or AMD graphics
   driver for this PC (Game Ready or a newer hotfix; Recommended or a newer Optional), Chrome Remote Desktop updates

@@ -400,10 +400,16 @@ static void aioClick(int id, int x, int y) {
     case A_P_CRD:     appsClick(APP_CRD); break;
     case A_P_NANAZIP: appsClick(APP_NANAZIP); break;
     case A_P_TAILSCALE: appsClick(APP_TAILSCALE); break;
+    case A_P_ABDM:    appsClick(APP_ABDM); break;
+    case A_P_CRAFT:   appsClick(APP_CRAFT); break;
+    case A_P_PAGE0: case A_P_PAGE1: appsPageClick(id - A_P_PAGE0); break;
     case A_P_NVIDIA:  gpuClick(GPU_NV); break;
     case A_P_AMD:     gpuClick(GPU_AMD); break;
-    case A_P_UPD0: case A_P_UPD0 + 1: case A_P_UPD0 + 2: case A_P_UPD0 + 3: case A_P_UPD0 + 4: case A_P_UPD0 + 5:
+    case A_P_UPD0: case A_P_UPD0 + 1: case A_P_UPD0 + 2: case A_P_UPD0 + 3: case A_P_UPD0 + 4: case A_P_UPD0 + 5: case A_P_UPD0 + 6: case A_P_UPD0 + 7:
         appsUpdateClick(id - A_P_UPD0); break;
+    case A_P_DEL0: case A_P_DEL0 + 1: case A_P_DEL0 + 2: case A_P_DEL0 + 3: case A_P_DEL0 + 4:
+    case A_P_DEL0 + 5: case A_P_DEL0 + 6: case A_P_DEL0 + 7: case A_P_DEL0 + 8: case A_P_DEL0 + 9:
+        appsUninstallClick(id - A_P_DEL0); break;
     case A_T_EXPLORE: case A_T_GALLERY: case A_T_VBS: case A_T_RDP: case A_T_MAPDELAY: case A_T_WUDRV: case A_T_THEME: case A_T_REGION: case A_T_ANNOY:
         tweakButtonClicked(id); break;
     }
@@ -812,6 +818,7 @@ static BOOL runHelperCommand(const wchar_t* cmd, int* exitCode) {
 
     // download and install one of the Install Apps page's apps (a number, never a file or a link)
     if (!wcsncmp(cmd, L"--apps-install=", 15)) { *exitCode = appsHelperMain(cmd); return TRUE; }
+    if (!wcsncmp(cmd, L"--apps-links=", 13)) { *exitCode = appsLinksHelper(cmd); return TRUE; }
 
     // Install one update and return DISM's exit code. This is checked ahead of the flags below because
     // the command line holds a file path, which must not be mistaken for them.
