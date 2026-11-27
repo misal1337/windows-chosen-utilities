@@ -348,3 +348,13 @@ Elapsed {1}  •  estimating the time left…|Vergangen: {1}  •  Restzeit wird
 {1}%  •  Elapsed {2}  •  about {3} left|{1} %  •  Vergangen: {2}  •  noch etwa {3}|{1} %  •  Écoulé : {2}  •  reste environ {3}|{1} %  •  Transcurrido: {2}  •  faltan unos {3}|{1}%  •  Decorrido: {2}  •  faltam cerca de {3}|{1}%  •  已用 {2}  •  剩余约 {3}|{1}%  •  Прошло {2}  •  осталось около {3}
 {1} h {2} min|{1} Std. {2} Min.|{1} h {2} min|{1} h {2} min|{1} h {2} min|{1} 小时 {2} 分钟|{1} ч {2} мин
 {1} min|{1} Min.|{1} min|{1} min|{1} min|{1} 分钟|{1} мин
+Update to {1}|Auf {1} aktualisieren|Mettre à jour vers {1}|Actualizar a {1}|Atualizar para {1}|更新到 {1}|Обновить до {1}
+Up to date|Aktuell|À jour|Actualizada|Atualizado|已是最新|Актуальная версия
+Update app|App aktualisieren|Mettre à jour l'app|Actualizar la app|Atualizar o app|更新应用|Обновить приложение
+Downloading… {1}%|Download… {1} %|Téléchargement… {1} %|Descargando… {1} %|Baixando… {1}%|正在下载… {1}%|Загрузка… {1}%
+Update now|Jetzt aktualisieren|Mettre à jour maintenant|Actualizar ahora|Atualizar agora|立即更新|Обновить сейчас
+Download NVIDIA driver|NVIDIA-Treiber laden|Télécharger le pilote NVIDIA|Descargar driver NVIDIA|Baixar driver NVIDIA|下载 NVIDIA 驱动|Скачать драйвер NVIDIA
+Download AMD driver|AMD-Treiber laden|Télécharger le pilote AMD|Descargar driver AMD|Baixar driver AMD|下载 AMD 驱动|Скачать драйвер AMD
+No {1} graphics in this PC|Keine {1}-Grafik in diesem PC|Pas de carte graphique {1} dans ce PC|No hay gráficos {1} en este PC|Sem placa de vídeo {1} neste PC|此电脑没有 {1} 显卡|В этом ПК нет графики {1}
+Link copied to the clipboard|Link in die Zwischenablage kopiert|Lien copié dans le presse-papiers|Enlace copiado al portapapeles|Link copiado para a área de transferência|链接已复制到剪贴板|Ссылка скопирована в буфер обмена
+What's new in {1}|Neu in {1}|Nouveautés de la {1}|Novedades de la {1}|Novidades da {1}|{1} 新功能|Что нового в {1}

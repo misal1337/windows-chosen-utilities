@@ -34,9 +34,10 @@ static const AppDef APPS[APP_COUNT] = {
     { L"Pot Player", L"PotPlayer", L"PotPlayer", L"PotPlayerMini64.exe", TRUE, L"Kakao Corp.", L"/S",
       L"https://t1.daumcdn.net/potplayer/PotPlayer/Version/Latest/PotPlayerSetup64.exe", L"PotPlayer", KIND_EXE, NULL, NULL, L"PotPlayer_setup.exe" },
     // the host only: a service people connect to from remotedesktop.google.com, so no window and no shortcut
+    // from Google's update service, as Google's own updater gets it (the website's link lags behind a new version);
+    // saved under the website's file name, which an install from there is remembered by
     { L"Chrome Remote Desktop", L"Chrome Remote Desktop", L"Chrome Remote Desktop Host", NULL, FALSE, L"Google LLC", L"/qn /norestart",
-      L"https://dl.google.com/edgedl/chrome-remote-desktop/chromeremotedesktophost.msi", NULL, KIND_MSI,
-      L"%ProgramFiles(x86)%\\Google\\Chrome Remote Desktop", NULL, L"ChromeRemoteDesktopHost_setup.msi" },
+      NULL, NULL, KIND_MSI, L"%ProgramFiles(x86)%\\Google\\Chrome Remote Desktop", NULL, L"chromeremotedesktophost.msi" },
     // from the Microsoft Store (winget, as the signed-in user), so the Store keeps it updated; Start lists packaged apps by itself
     { L"NanaZip", L"NanaZip", NULL, NULL, FALSE, NULL, NULL, NULL, NULL, KIND_MSIX,
       NULL, L"40174MouriNaruto.NanaZip_", NULL, L"9N8G7TSCL18R" },
@@ -49,7 +50,7 @@ static const wchar_t* POT_EXTS[] = { L".mp4", L".mkv", L".mpg", L".mpeg", L".wmv
 static const wchar_t* NANAZIP_EXTS[] = { L".zip", L".rar", L".7z" };
 
 // what the helper's exit code says: the step in the top byte, Windows' or the installer's code below it
-enum { APS_OK, APS_LINK, APS_DOWNLOAD, APS_SIGN, APS_INSTALL, APS_MISSING, APS_FOLDER };
+enum { APS_OK, APS_LINK, APS_DOWNLOAD, APS_SIGN, APS_INSTALL, APS_MISSING, APS_FOLDER, APS_SAME };
 #define APS_CODE(step, detail) (((DWORD)(step) << 24) | ((DWORD)(detail) & 0xFFFFFF))
 // progress from the helper (WM_APP_APPSPROG): wParam a step, lParam megabytes so far while downloading
 enum { APP_STEP_LINK = 1, APP_STEP_DOWNLOAD, APP_STEP_SIGN, APP_STEP_INSTALL, APP_STEP_CLOSE, APP_STEP_SETTINGS };
@@ -132,11 +133,13 @@ static BOOL appsFindPackage(const AppDef* a, wchar_t* ver, int cch) {
 }
 
 // Looks through the uninstall entries Windows lists in Apps > Installed apps. exe gets its program, if it has one.
-static BOOL appsFindInstalledEx(const AppDef* a, wchar_t* ver, int cch, wchar_t* exe /* MAX_PATH, or NULL */) {
+// listedAs gets its full DisplayName (256), if asked.
+static BOOL appsFindInstalledName(const AppDef* a, wchar_t* ver, int cch, wchar_t* exe /* MAX_PATH, or NULL */, wchar_t* listedAs) {
     static const struct { HKEY root; REGSAM view; } WHERE[] = {
         { HKEY_LOCAL_MACHINE, KEY_WOW64_64KEY }, { HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY }, { HKEY_CURRENT_USER, 0 } };
     ver[0] = 0;
     if (exe) exe[0] = 0;
+    if (listedAs) listedAs[0] = 0;
     if (a->kind == KIND_MSIX) return appsFindPackage(a, ver, cch);
     size_t pl = wcslen(a->listed);
     for (int w = 0; w < 3; w++) {
@@ -150,6 +153,7 @@ static BOOL appsFindInstalledEx(const AppDef* a, wchar_t* ver, int cch, wchar_t*
             wchar_t name[256]; DWORD cb = sizeof(name);       // k already looks at the right view, and so do its subkeys
             if (RegGetValueW(k, sub, L"DisplayName", RRF_RT_REG_SZ, NULL, name, &cb) != ERROR_SUCCESS) continue;
             if (_wcsnicmp(name, a->listed, pl)) continue;
+            if (listedAs) lstrcpynW(listedAs, name, 256);
             cb = cch * sizeof(wchar_t);
             if (RegGetValueW(k, sub, L"DisplayVersion", RRF_RT_REG_SZ, NULL, ver, &cb) != ERROR_SUCCESS || !ver[0])
                 lstrcpynW(ver, L"installed", cch);
@@ -172,6 +176,7 @@ static BOOL appsFindInstalledEx(const AppDef* a, wchar_t* ver, int cch, wchar_t*
     }
     return FALSE;
 }
+static BOOL appsFindInstalledEx(const AppDef* a, wchar_t* ver, int cch, wchar_t* exe) { return appsFindInstalledName(a, ver, cch, exe, NULL); }
 static BOOL appsFindInstalled(const AppDef* a, wchar_t* ver, int cch) { return appsFindInstalledEx(a, ver, cch, NULL); }
 
 static void appsRefresh(void) {
@@ -256,17 +261,27 @@ static BOOL appsIdmLink(wchar_t* url, int cch, DWORD* err) {
     return TRUE;
 }
 
-// Google's update service (the one Google's own updaters ask) for an app's newest version
-static BOOL appsGoogleLatest(const char* appId, wchar_t* out, int cch) {
+// Google's update service (the one Google's own updaters ask): the version it offers, and where that exact package is
+// with its SHA-256. A new version is rolled out gradually, so one answer may name it and the next the version before.
+static BOOL appsGoogleOnce(const char* appId, wchar_t* out, int cch, wchar_t* url, int urlCch, wchar_t* sha /* 65 */) {
+    url[0] = 0; sha[0] = 0;
     // it only answers when told the Windows version (GetVersionEx would report an old one, so RtlGetVersion)
     RTL_OSVERSIONINFOW os = { sizeof(os) };
     LONG (WINAPI *rtlGetVersion)(RTL_OSVERSIONINFOW*) =
         (LONG (WINAPI *)(RTL_OSVERSIONINFOW*))(void*)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
     if (!rtlGetVersion || rtlGetVersion(&os) != 0) { os.dwMajorVersion = 10; os.dwMinorVersion = 0; os.dwBuildNumber = 19045; }
-    char body[700];
-    snprintf(body, sizeof(body), "{\"request\":{\"protocol\":\"3.1\",\"ismachine\":1,\"os\":{\"platform\":\"win\",\"version\":\"%lu.%lu.%lu\","
-             "\"arch\":\"x86_64\"},\"arch\":\"x86_64\",\"app\":[{\"appid\":\"%s\",\"version\":\"1.0.0.0\",\"updatecheck\":{}}]}}",
-             os.dwMajorVersion, os.dwMinorVersion, os.dwBuildNumber, appId);
+    // a fresh request and session id each time, as Google's own updater sends: the rollout decides per request
+    char ids[2][40];
+    for (int i = 0; i < 2; i++) {
+        GUID g; CoCreateGuid(&g);
+        snprintf(ids[i], 40, "{%08lX-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}", (unsigned long)g.Data1, g.Data2, g.Data3,
+                 g.Data4[0], g.Data4[1], g.Data4[2], g.Data4[3], g.Data4[4], g.Data4[5], g.Data4[6], g.Data4[7]);
+    }
+    char body[800];
+    snprintf(body, sizeof(body), "{\"request\":{\"protocol\":\"3.1\",\"ismachine\":1,\"requestid\":\"%s\",\"sessionid\":\"%s\","
+             "\"os\":{\"platform\":\"win\",\"version\":\"%lu.%lu.%lu\",\"arch\":\"x86_64\"},\"arch\":\"x86_64\","
+             "\"app\":[{\"appid\":\"%s\",\"version\":\"1.0.0.0\",\"updatecheck\":{}}]}}",
+             ids[0], ids[1], os.dwMajorVersion, os.dwMinorVersion, os.dwBuildNumber, appId);
     BOOL ok = FALSE;
     HINTERNET s = WinHttpOpen(L"WindowsChosenUtilities", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     HINTERNET c = s ? WinHttpConnect(s, L"update.googleapis.com", INTERNET_DEFAULT_HTTPS_PORT, 0) : NULL;
@@ -283,12 +298,91 @@ static BOOL appsGoogleLatest(const char* appId, wchar_t* out, int cch) {
             buf[len] = 0;
             const char* m = strstr(buf, "\"manifest\"");
             ok = m && appsJsonVersion(m, "\"version\"", out, cch);
+            // the package: Google's https download server, the file's name and its SHA-256
+            const char* cb = strstr(buf, "\"codebase\":\"https://dl.google.com/");
+            const char* pk = m ? strstr(m, "\"package\"") : NULL;
+            const char* nm = pk ? strstr(pk, "\"name\":\"") : NULL;
+            const char* hs = pk ? strstr(pk, "\"hash_sha256\":\"") : NULL;
+            if (ok && cb && nm && hs) {
+                char a[600] = "";
+                const char* ce = strchr(cb + 12, '"');
+                const char* ne = strchr(nm + 8, '"');
+                if (ce && ne && (ce - cb - 12) + (ne - nm - 8) < 590) {
+                    memcpy(a, cb + 12, ce - cb - 12);
+                    memcpy(a + (ce - cb - 12), nm + 8, ne - nm - 8);
+                    a[(ce - cb - 12) + (ne - nm - 8)] = 0;
+                    BOOL safe = TRUE;               // a plain path: no quotes, spaces or escapes
+                    for (const char* q = a; *q; q++) if (!isalnum((unsigned char)*q) && !strchr(":/._-", *q)) safe = FALSE;
+                    if (safe) MultiByteToWideChar(CP_UTF8, 0, a, -1, url, urlCch);
+                }
+                for (int i = 0; i < 64 && isxdigit((unsigned char)hs[15 + i]); i++) { sha[i] = (wchar_t)tolower((unsigned char)hs[15 + i]); sha[i + 1] = 0; }
+                if (wcslen(sha) != 64) { sha[0] = 0; url[0] = 0; }
+            }
         }
         WinHttpCloseHandle(r);
     }
     if (c) WinHttpCloseHandle(c);
     if (s) WinHttpCloseHandle(s);
     return ok;
+}
+
+// The newest of a few answers, so a version being rolled out is found (and is what Update then installs)
+static BOOL appsGoogleOffer(const char* appId, int tries, wchar_t* out, int cch, wchar_t* url, int urlCch, wchar_t* sha /* 65 */) {
+    out[0] = 0; url[0] = 0; sha[0] = 0;
+    for (int i = 0; i < tries; i++) {
+        wchar_t v[64], u[600], h[65];
+        if (!appsGoogleOnce(appId, v, 64, u, 600, h) || !u[0]) continue;
+        if (!out[0] || appsVerCmp(v, out) > 0) { lstrcpynW(out, v, cch); lstrcpynW(url, u, urlCch); wcscpy(sha, h); }
+    }
+    return out[0] != 0;
+}
+#define CRD_APPID "{b210701e-ffc4-49e3-932b-370728c72662}"
+static wchar_t g_appsSha[65];          // the helper: the SHA-256 the publisher lists for the download, when it lists one
+static wchar_t g_appsOffered[64];      // the helper: the version that download is
+
+// Chrome Remote Desktop's newest package, once Google's service has offered it. While a version is rolled out only
+// some answers name it, so the first one that does is remembered (version, Google's link, SHA-256) and used from then
+// on, until it's installed or Google takes the file down.
+#define CRD_KEY L"Software\\WindowsChosenUtilities\\ChromeRemoteDesktop"
+static BOOL appsCrdStored(wchar_t* ver, wchar_t* url, int urlCch, wchar_t* sha /* 65 */) {
+    DWORD cb = 64 * sizeof(wchar_t), cu = urlCch * sizeof(wchar_t), cs = 65 * sizeof(wchar_t);
+    ver[0] = url[0] = sha[0] = 0;
+    if (RegGetValueW(HKEY_CURRENT_USER, CRD_KEY, L"Version", RRF_RT_REG_SZ, NULL, ver, &cb) ||
+        RegGetValueW(HKEY_CURRENT_USER, CRD_KEY, L"Url", RRF_RT_REG_SZ, NULL, url, &cu) ||
+        RegGetValueW(HKEY_CURRENT_USER, CRD_KEY, L"Sha256", RRF_RT_REG_SZ, NULL, sha, &cs)) { ver[0] = url[0] = sha[0] = 0; return FALSE; }
+    // only a package on Google's download server, with a hash to check it against
+    if (wcsncmp(url, L"https://dl.google.com/", 22) || wcschr(url, L'"') || wcschr(url, L' ') || !dlHex64(sha)) { ver[0] = url[0] = sha[0] = 0; return FALSE; }
+    return iswdigit(ver[0]);
+}
+static void appsCrdStore(const wchar_t* ver, const wchar_t* url, const wchar_t* sha) {
+    if (!ver) { RegDeleteTreeW(HKEY_CURRENT_USER, CRD_KEY); RegDeleteKeyW(HKEY_CURRENT_USER, CRD_KEY); return; }
+    RegSetKeyValueW(HKEY_CURRENT_USER, CRD_KEY, L"Version", REG_SZ, ver, (DWORD)((wcslen(ver) + 1) * sizeof(wchar_t)));
+    RegSetKeyValueW(HKEY_CURRENT_USER, CRD_KEY, L"Url", REG_SZ, url, (DWORD)((wcslen(url) + 1) * sizeof(wchar_t)));
+    RegSetKeyValueW(HKEY_CURRENT_USER, CRD_KEY, L"Sha256", REG_SZ, sha, (DWORD)((wcslen(sha) + 1) * sizeof(wchar_t)));
+}
+
+// The newest package known: the service's answers now, or the one remembered if that's newer and still on Google's
+// server. Remembers a newer answer. FALSE if neither gives one.
+static BOOL appsCrdNewest(int tries, wchar_t* ver, int cch, wchar_t* url, int urlCch, wchar_t* sha /* 65 */) {
+    wchar_t sv[64], su[600], ss[65], have[64] = L"";
+    BOOL fresh = appsGoogleOffer(CRD_APPID, tries, ver, cch, url, urlCch, sha);
+    BOOL stored = appsCrdStored(sv, su, 600, ss);
+    if (stored && appsFindInstalled(&APPS[APP_CRD], have, 64) && appsVerCmp(sv, have) <= 0) { appsCrdStore(NULL, NULL, NULL); stored = FALSE; }
+    if (stored && (!fresh || appsVerCmp(sv, ver) > 0)) {
+        DWORD status = 0;                   // still there? Google may have taken a withdrawn version down
+        if (!dlHttpReq(su, L"HEAD", NULL, NULL, NULL, &status, NULL, FALSE, NULL, NULL) && status == 200) {
+            lstrcpynW(ver, sv, cch); lstrcpynW(url, su, urlCch); wcscpy(sha, ss);
+            return TRUE;
+        }
+        if (status == 404 || status == 403 || status == 410) appsCrdStore(NULL, NULL, NULL);
+    }
+    if (fresh && (!stored || appsVerCmp(ver, sv) > 0) && (!have[0] || appsVerCmp(ver, have) > 0)) appsCrdStore(ver, url, sha);
+    return fresh;
+}
+static BOOL appsGoogleLatest(const char* appId, wchar_t* out, int cch) {
+    wchar_t url[600], sha[65];
+    (void)appId;
+    return appsCrdNewest(8, out, cch, url, 600, sha);
 }
 
 static BOOL appsLatestVersion(int app, wchar_t* out, int cch) {
@@ -322,7 +416,7 @@ static BOOL appsLatestVersion(int app, wchar_t* out, int cch) {
         break;
     }
     case APP_CRD:
-        ok = appsGoogleLatest("{b210701e-ffc4-49e3-932b-370728c72662}", out, cch);
+        ok = appsGoogleLatest(CRD_APPID, out, cch);
         break;
     case APP_NANAZIP:                     // the Microsoft Store updates it, so no Update button
         break;
@@ -340,8 +434,13 @@ static BOOL appsLatestVersion(int app, wchar_t* out, int cch) {
 static BOOL appsResolveUrl(int app, wchar_t* url, int cch, DWORD* err) {
     const AppDef* a = &APPS[app];
     *err = 0;
+    g_appsSha[0] = 0; g_appsOffered[0] = 0;
     if (a->url) { lstrcpynW(url, a->url, cch); return TRUE; }
     if (app == APP_IDM) return appsIdmLink(url, cch, err);
+    if (app == APP_CRD) {               // the package Google's update service offers, not the website's link, which lags behind
+        if (!appsCrdNewest(8, g_appsOffered, 64, url, cch, g_appsSha)) { *err = ERROR_NOT_FOUND; return FALSE; }
+        return TRUE;
+    }
     wchar_t v[64];
     if (!appsLatestVersion(app, v, 64)) { *err = ERROR_NOT_FOUND; return FALSE; }
     if (app == APP_TAILSCALE) swprintf(url, cch, L"https://pkgs.tailscale.com/stable/tailscale-setup-%s-amd64.msi", v);
@@ -658,6 +757,254 @@ static DWORD appsIdmWaitSetup(void) {
     return code;
 }
 
+// ---------- Firefox: Mozilla's own delta update ----------
+// Firefox updates itself with a small "partial" MAR from Mozilla's update service (aus5.mozilla.org) when there is
+// one for the exact build installed. Mozilla makes those only from its last few builds (in Nov 2026: 159.0 to 160.0.1
+// got one to 161.0, 158.0.1 and older only the complete update), so an older Firefox gets the full setup. The service
+// is asked as Firefox itself asks it, the MAR is checked against the SHA-512 it lists, and it's applied with the
+// installed Firefox's own updater.exe, which checks Mozilla's signature and the channel on the MAR and puts every file
+// back if anything fails. Returns 0 when Firefox is updated; otherwise the log says why, and the full setup is used.
+
+// An XML attribute's value in the element starting at el (up to its '>'), with &amp; turned back into &
+static BOOL appsXmlAttr(const char* el, const char* name, char* out, int cch) {
+    const char* end = strchr(el, '>');
+    size_t nl = strlen(name);
+    out[0] = 0;
+    for (const char* p = strstr(el, name); p && (!end || p < end); p = strstr(p + 1, name)) {
+        if (p == el || p[-1] != ' ' || p[nl] != '=' || p[nl + 1] != '"') continue;
+        const char* v = p + nl + 2; int n = 0;
+        while (*v && *v != '"' && n < cch - 1) {
+            if (!strncmp(v, "&amp;", 5)) { out[n++] = '&'; v += 5; } else out[n++] = *v++;
+        }
+        out[n] = 0;
+        return *v == '"' && n > 0;
+    }
+    return FALSE;
+}
+
+static BOOL appsAllowed(const wchar_t* s, const wchar_t* extra) {    // letters, digits and the extra characters only
+    if (!s[0]) return FALSE;
+    for (; *s; s++) if (!iswalnum(*s) && !wcschr(extra, *s)) return FALSE;
+    return TRUE;
+}
+
+// The last few lines of the updater's log, for when it fails
+static void appsSayLogTail(const wchar_t* path, int lines) {
+    char* t = NULL; DWORD n = 0;
+    HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return;
+    DWORD size = GetFileSize(f, NULL);
+    if (size != INVALID_FILE_SIZE && size < (8u << 20) && (t = (char*)malloc(size + 1)) && ReadFile(f, t, size, &n, NULL)) {
+        t[n] = 0;
+        int found = 0; char* p = t + n;
+        while (p > t && found <= lines) { p--; if (*p == '\n' && p + 1 < t + n && p[1] != '\n' && p[1] != '\r') found++; }
+        char* line = (found > lines) ? p + 1 : t;
+        for (char* e; line && *line; line = e ? e + 1 : NULL) {
+            e = strchr(line, '\n');
+            if (e) *e = 0;
+            size_t l = strlen(line);
+            if (l && line[l - 1] == '\r') line[l - 1] = 0;
+            if (*line) { wchar_t w[APPS_LOG_LINE]; MultiByteToWideChar(CP_UTF8, 0, line, -1, w, APPS_LOG_LINE); w[APPS_LOG_LINE - 1] = 0; appsSay(L"  %s", w); }
+        }
+    }
+    free(t);
+    CloseHandle(f);
+}
+
+static DWORD appsFirefoxDeltaIn(const wchar_t* dir, const wchar_t* patch) {
+    const AppDef* a = &APPS[APP_FIREFOX];
+    wchar_t ver[64], exe[MAX_PATH], listed[256], inst[MAX_PATH], ini[MAX_PATH];
+    appsProgress(APP_STEP_LINK, 0);
+    appsSay(L"Asking Mozilla's update service for a delta update…");
+    if (!appsFindInstalledName(a, ver, 64, exe, listed) || !exe[0]) { appsSay(L"Couldn't find Firefox's folder."); return 1; }
+    lstrcpynW(inst, exe, MAX_PATH);
+    PathRemoveFileSpecW(inst);
+
+    // the installed build, its channel, and its CPU and language (its uninstall entry reads "Mozilla Firefox (x64 en-US)")
+    wchar_t appVer[64] = L"", build[32] = L"", channel[40] = L"release", arch[16] = L"", locale[24] = L"";
+    swprintf(ini, MAX_PATH, L"%s\\application.ini", inst);
+    GetPrivateProfileStringW(L"App", L"Version", L"", appVer, 64, ini);
+    GetPrivateProfileStringW(L"App", L"BuildID", L"", build, 32, ini);
+    if (!build[0]) {
+        swprintf(ini, MAX_PATH, L"%s\\platform.ini", inst);
+        GetPrivateProfileStringW(L"Build", L"Milestone", L"", appVer, 64, ini);
+        GetPrivateProfileStringW(L"Build", L"BuildID", L"", build, 32, ini);
+    }
+    if (!appsAllowed(appVer, L".") || !appsAllowed(build, L"")) { appsSay(L"Couldn't read Firefox's version and build from its folder."); return 1; }
+    {
+        wchar_t prefs[MAX_PATH]; char* js = NULL;
+        swprintf(prefs, MAX_PATH, L"%s\\defaults\\pref\\channel-prefs.js", inst);
+        HANDLE f = CreateFileW(prefs, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+        if (f != INVALID_HANDLE_VALUE) {
+            DWORD size = GetFileSize(f, NULL), n = 0;
+            if (size < 65536 && (js = (char*)malloc(size + 1)) && ReadFile(f, js, size, &n, NULL)) {
+                js[n] = 0;
+                const char* p = strstr(js, "\"app.update.channel\"");
+                if (p && (p = strchr(p + 20, '"'))) {
+                    wchar_t c[40]; int k = 0;
+                    for (p++; *p && *p != '"' && k < 39; p++) c[k++] = (wchar_t)(unsigned char)*p;
+                    c[k] = 0;
+                    if (appsAllowed(c, L"-")) lstrcpynW(channel, c, 40);
+                }
+            }
+            free(js);
+            CloseHandle(f);
+        }
+    }
+    const wchar_t* open = wcschr(listed, L'(');
+    if (open) swscanf(open + 1, L"%15s %23[^)]", arch, locale);
+    const wchar_t* target = !_wcsicmp(arch, L"x64") ? L"WINNT_x86_64-msvc-x64" : !_wcsicmp(arch, L"x86") ? L"WINNT_x86-msvc-x86" :
+                            !_wcsicmp(arch, L"AArch64") || !_wcsicmp(arch, L"arm64") ? L"WINNT_aarch64-msvc-aarch64" : NULL;
+    if (!target || !appsAllowed(locale, L"-")) { appsSay(L"Couldn't tell Firefox's CPU and language from \"%s\".", listed); return 1; }
+
+    // asked as Firefox asks it; force=1 is what its own "Check for updates" sends, so a gradual rollout doesn't hide it
+    RTL_OSVERSIONINFOW os = { sizeof(os) };
+    LONG (WINAPI *rtlGetVersion)(RTL_OSVERSIONINFOW*) =
+        (LONG (WINAPI *)(RTL_OSVERSIONINFOW*))(void*)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
+    if (!rtlGetVersion || rtlGetVersion(&os) != 0) { os.dwMajorVersion = 10; os.dwMinorVersion = 0; os.dwBuildNumber = 19045; }
+    DWORD ubr = 0, cb = sizeof(ubr);
+    RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"UBR", RRF_RT_REG_DWORD, NULL, &ubr, &cb);
+    MEMORYSTATUSEX ms = { sizeof(ms) };
+    GlobalMemoryStatusEx(&ms);
+    wchar_t url[1200];
+    swprintf(url, 1200, L"https://aus5.mozilla.org/update/6/Firefox/%s/%s/%s/%s/%s/Windows_NT%%20%lu.%lu.0.0.%lu.%lu%%20(%s)/"
+             L"ISET:SSE4_2,MEM:%llu/default/default/update.xml?force=1",
+             appVer, build, target, locale, channel, os.dwMajorVersion, os.dwMinorVersion, os.dwBuildNumber, ubr,
+             wcsstr(target, L"aarch64") ? L"aarch64" : wcsstr(target, L"x86_64") ? L"x64" : L"x86", ms.ullTotalPhys >> 20);
+    char* xml = NULL; DWORD status = 0;
+    DWORD e = dlHttp(url, &xml, NULL, &status);
+    if (e || status != 200 || !xml) { appsSay(e ? L"The update service didn't answer (error %lu)." : L"The update service didn't answer (HTTP %lu).", e ? e : status); free(xml); return 1; }
+    const char* up = strstr(xml, "<update ");
+    char offered[64], type[24], link[1200], hashFn[16], hash[160], sizeA[24];
+    if (!up || !appsXmlAttr(up, "appVersion", offered, 64)) { appsSay(L"The update service offers nothing newer for Firefox %s (build %s).", appVer, build); free(xml); return 1; }
+    wchar_t offeredW[64], latest[64];
+    MultiByteToWideChar(CP_UTF8, 0, offered, -1, offeredW, 64);
+    if (appsLatestVersion(APP_FIREFOX, latest, 64) && appsVerCmp(offeredW, latest) < 0) {
+        // a very old Firefox is first sent to a stepping-stone version; the full setup goes straight to the newest
+        appsSay(L"The update service offers %s first, not %s.", offeredW, latest); free(xml); return 1;
+    }
+    const char* partial = NULL;
+    for (const char* p = strstr(up, "<patch "); p; p = strstr(p + 1, "<patch "))
+        if (appsXmlAttr(p, "type", type, 24) && !strcmp(type, "partial")) { partial = p; break; }
+    if (!partial) {
+        appsSay(L"No delta update from Firefox %s: Mozilla makes them only from its last few releases.", appVer);
+        free(xml); return 1;
+    }
+    BOOL ok = appsXmlAttr(partial, "URL", link, 1200) && appsXmlAttr(partial, "hashFunction", hashFn, 16) &&
+              appsXmlAttr(partial, "hashValue", hash, 160) && appsXmlAttr(partial, "size", sizeA, 24);
+    free(xml);
+    unsigned long long want = ok ? _strtoui64(sizeA, NULL, 10) : 0;
+    if (!ok || _stricmp(hashFn, "sha512") || strlen(hash) != 128 || !want || want > (500ull << 20) || _strnicmp(link, "https://", 8)) {
+        appsSay(L"The update service's answer didn't look right."); return 1; }
+    {   // only from Mozilla's own servers
+        const char* h = link + 8, *slash = strchr(h, '/');
+        size_t hl = slash ? (size_t)(slash - h) : strlen(h);
+        BOOL moz = (hl > 12 && !_strnicmp(h + hl - 12, ".mozilla.org", 12)) || (hl > 12 && !_strnicmp(h + hl - 12, ".mozilla.net", 12)) ||
+                   (hl == 11 && !_strnicmp(h, "mozilla.org", 11));
+        for (const char* c = h; c < h + hl; c++) if (!isalnum((unsigned char)*c) && *c != '.' && *c != '-') moz = FALSE;
+        if (!moz) { appsSay(L"The update service pointed outside Mozilla's servers."); return 1; }
+    }
+    wchar_t linkW[1200];
+    MultiByteToWideChar(CP_UTF8, 0, link, -1, linkW, 1200);
+    appsSay(L"Delta update %s -> %s: %.1f MB (the full setup is about 90 MB).", appVer, offeredW, (double)want / 1048576.0);
+
+    // the MAR, as update.mar in the patch folder, with update.status "pending" beside it
+    wchar_t mar[MAX_PATH], stat[MAX_PATH], logf[MAX_PATH];
+    swprintf(mar, MAX_PATH, L"%s\\update.mar", patch);
+    swprintf(stat, MAX_PATH, L"%s\\update.status", patch);
+    swprintf(logf, MAX_PATH, L"%s\\update.log", patch);
+    appsSay(L"From %s", linkW);
+    appsProgress(APP_STEP_DOWNLOAD, 0);
+    appsSay(L"Downloading…");
+    int lastMb = -1;
+    e = dlHttpCore(linkW, NULL, mar, &status, FALSE, appsDownloadTick, &lastMb);
+    if (e || status != 200) { appsSay(e ? L"Download failed (error %lu)." : L"Download failed (HTTP %lu).", e ? e : status); return 1; }
+    WIN32_FILE_ATTRIBUTE_DATA fa;
+    unsigned long long got = GetFileAttributesExW(mar, GetFileExInfoStandard, &fa) ? fileBytes(fa.nFileSizeHigh, fa.nFileSizeLow) : 0;
+    appsSayOver(L"Downloaded %.1f MB.", (double)got / 1048576.0);
+    appsProgress(APP_STEP_SIGN, 0);
+    wchar_t hex[129], hashW[160];
+    MultiByteToWideChar(CP_UTF8, 0, hash, -1, hashW, 160);
+    if (got != want || !dlHashFile(mar, CALG_SHA_512, hex) || _wcsicmp(hex, hashW)) {
+        appsSay(L"The delta update doesn't match the size and SHA-512 the update service listed."); return 1; }
+    appsSay(L"SHA-512 checked. Firefox's updater checks Mozilla's signature on it as well.");
+    HANDLE f = CreateFileW(stat, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    DWORD wr = 0;
+    BOOL wrote = f != INVALID_HANDLE_VALUE && WriteFile(f, "pending\n", 8, &wr, NULL) && wr == 8;
+    if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
+    if (!wrote) { appsSay(L"Couldn't prepare the update (error %lu).", GetLastError()); return 1; }
+
+    // Firefox runs a copy of its updater from outside its folder, since the update may replace updater.exe itself
+    wchar_t upd[MAX_PATH], src[MAX_PATH], dst[MAX_PATH];
+    swprintf(src, MAX_PATH, L"%s\\updater.exe", inst);
+    swprintf(upd, MAX_PATH, L"%s\\updater.exe", dir);
+    if (!CopyFileW(src, upd, FALSE)) { appsSay(L"Couldn't copy Firefox's updater (error %lu).", GetLastError()); return 1; }
+    swprintf(src, MAX_PATH, L"%s\\updater.ini", inst);
+    swprintf(dst, MAX_PATH, L"%s\\updater.ini", dir);
+    CopyFileW(src, dst, FALSE);
+    HRESULT hr = appsCheckSigner(upd, a->signer);
+    if (hr != S_OK) { appsSay(L"Firefox's updater.exe isn't signed by %s (0x%08lX).", a->signer, (DWORD)hr); return 1; }
+
+    // updater.exe arg-version patch-dir install-dir apply-to-dir which-invocation [wait-pid]: with no callback app it
+    // applies the update here and now, with this helper's administrator rights, and doesn't start Firefox
+    appsProgress(APP_STEP_INSTALL, 0);
+    appsSay(L"Applying it with Firefox's own updater…");
+    wchar_t cmd[MAX_PATH * 4 + 64];
+    swprintf(cmd, MAX_PATH * 4 + 64, L"\"%s\" 3 \"%s\" \"%s\" \"%s\" first 0", upd, patch, inst, inst);
+    STARTUPINFOW si = { sizeof(si) }; PROCESS_INFORMATION pi;
+    DWORD code = 1;
+    if (!CreateProcessW(upd, cmd, NULL, NULL, FALSE, 0, NULL, dir, &si, &pi)) { appsSay(L"Couldn't start Firefox's updater (error %lu).", GetLastError()); return 1; }
+    CloseHandle(pi.hThread);
+    if (WaitForSingleObject(pi.hProcess, 30 * 60 * 1000) == WAIT_TIMEOUT) code = WAIT_TIMEOUT;
+    else GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hProcess);
+    char result[64] = "";
+    f = CreateFileW(stat, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (f != INVALID_HANDLE_VALUE) {
+        DWORD n = 0;
+        if (ReadFile(f, result, sizeof(result) - 1, &n, NULL)) result[n] = 0;
+        CloseHandle(f);
+        for (char* c = result; *c; c++) if (*c == '\r' || *c == '\n') { *c = 0; break; }
+    }
+    if (code || strcmp(result, "succeeded")) {
+        wchar_t rw[64]; MultiByteToWideChar(CP_UTF8, 0, result[0] ? result : "no status", -1, rw, 64);
+        appsSay(L"Firefox's updater didn't finish (exit code %lu, \"%s\"); it puts back what it changed. Its log ends:", code, rw);
+        appsSayLogTail(logf, 4);
+        return 1;
+    }
+    appsSay(L"Firefox's updater finished: succeeded.");
+
+    // what Firefox's updater does next when Firefox starts it: its log goes to uninstall\uninstall.update for the
+    // uninstaller, and helper.exe /PostUpdate updates the uninstall entry (the version Windows lists) and the like.
+    // Without /DesktopLauncher, so no desktop shortcut.
+    wchar_t helper[MAX_PATH], hcmd[MAX_PATH + 100];
+    swprintf(dst, MAX_PATH, L"%s\\uninstall\\uninstall.update", inst);
+    CopyFileW(logf, dst, FALSE);
+    swprintf(helper, MAX_PATH, L"%s\\uninstall\\helper.exe", inst);
+    if (isFile(helper)) {
+        swprintf(hcmd, MAX_PATH + 100, L"\"%s\" /PostUpdate /PostUpdateTarget:Installation", helper);
+        if (CreateProcessW(helper, hcmd, NULL, NULL, FALSE, 0, NULL, inst, &si, &pi)) {
+            CloseHandle(pi.hThread);
+            WaitForSingleObject(pi.hProcess, 5 * 60 * 1000);
+            CloseHandle(pi.hProcess);
+            appsSay(L"Ran Firefox's post-update step (helper.exe /PostUpdate).");
+        } else appsSay(L"Couldn't run Firefox's post-update step (error %lu).", GetLastError());
+    }
+    return 0;
+}
+
+static DWORD appsFirefoxDelta(const wchar_t* dir) {
+    wchar_t patch[MAX_PATH], p[MAX_PATH];
+    swprintf(patch, MAX_PATH, L"%s\\patch", dir);
+    if (!CreateDirectoryW(patch, NULL)) { appsSay(L"Couldn't make the update folder (error %lu).", GetLastError()); return 1; }
+    DWORD r = appsFirefoxDeltaIn(dir, patch);
+    deleteContents(patch);
+    RemoveDirectoryW(patch);
+    swprintf(p, MAX_PATH, L"%s\\updater.exe", dir); DeleteFileW(p);
+    swprintf(p, MAX_PATH, L"%s\\updater.ini", dir); DeleteFileW(p);
+    return r;
+}
+
 static void appsIdmDriver(const AppDef* a);
 static DWORD appsInstall(int app, BOOL update) {
     const AppDef* a = &APPS[app];
@@ -676,9 +1023,14 @@ static DWORD appsInstall(int app, BOOL update) {
     swprintf(path, MAX_PATH, L"%s\\%s", dir, quick ? L"idmupdt.exe" : a->fileName);
 
     DWORD result = 0;
+    BOOL delta = FALSE;                     // Firefox updated with Mozilla's delta update, so no setup to run
     if (quick) {
         result = appsIdmFetchUpdate(path);
         goto run;
+    }
+    if (app == APP_FIREFOX && update) {
+        if (appsFirefoxDelta(dir) == 0) { delta = TRUE; goto run; }
+        appsSay(L"Using Firefox's full setup instead.");
     }
     appsProgress(APP_STEP_LINK, 0);
     appsSay(L"Finding the newest %s…", a->name);
@@ -690,7 +1042,13 @@ static DWORD appsInstall(int app, BOOL update) {
         const wchar_t* fn = PathFindFileNameW(url);
         BOOL plain = a->kind == KIND_MSI && wcslen(fn) < 100 && !wcschr(fn, L'?');
         for (const wchar_t* c = fn; plain && *c; c++) if (!iswalnum(*c) && *c != L'-' && *c != L'_' && *c != L'.') plain = FALSE;
-        if (plain && !_wcsicmp(PathFindExtensionW(fn), L".msi")) swprintf(path, MAX_PATH, L"%s\\%s", dir, fn);
+        if (plain && !_wcsicmp(PathFindExtensionW(fn), L".msi") && app != APP_CRD) swprintf(path, MAX_PATH, L"%s\\%s", dir, fn);
+        // An Update that would only reinstall the same version: Windows Installer refuses that (1603), so stop here
+        wchar_t have[64];
+        if (update && g_appsOffered[0] && appsFindInstalled(a, have, 64) && appsVerCmp(g_appsOffered, have) <= 0) {
+            appsSay(L"The publisher offers %s right now, which is already installed.", g_appsOffered);
+            result = APS_CODE(APS_SAME, 0);
+        }
     }
 
     if (!result) {
@@ -703,6 +1061,13 @@ static DWORD appsInstall(int app, BOOL update) {
             WIN32_FILE_ATTRIBUTE_DATA fa;
             double mb = GetFileAttributesExW(path, GetFileExInfoStandard, &fa) ? (double)fileBytes(fa.nFileSizeHigh, fa.nFileSizeLow) / 1048576.0 : 0;
             appsSayOver(L"Downloaded %.1f MB.", mb);
+            wchar_t hex[65];
+            if (g_appsSha[0]) {                 // the publisher listed the file's SHA-256
+                if (!dlSha256(path, hex) || _wcsicmp(hex, g_appsSha)) {
+                    result = APS_CODE(APS_SIGN, ERROR_INVALID_DATA);
+                    appsSay(L"The download's SHA-256 doesn't match the one the publisher lists. Deleted it.");
+                } else appsSay(L"SHA-256 matches the publisher's (%s %s).", a->name, g_appsOffered);
+            }
         }
     }
     if (!result) {
@@ -717,7 +1082,8 @@ run:
         DWORD before[64]; int nb = a->closeFirst ? appsPids(a->exe, before, 64) : 0;
         wchar_t cmd[MAX_PATH * 2 + 400], runner[MAX_PATH];
         DWORD code = 1;
-        if (a->kind == KIND_MSIX) {
+        if (delta) code = 0;
+        else if (a->kind == KIND_MSIX) {
             // Add-AppxPackage, for the signed-in user. If the app is open it finishes when it closes.
             GetSystemDirectoryW(runner, MAX_PATH);
             wcscat(runner, L"\\WindowsPowerShell\\v1.0\\powershell.exe");
@@ -746,7 +1112,7 @@ run:
                 if (quick && code == 0) code = appsIdmWaitSetup();
             }
         }
-        appsSay(L"Installer finished, exit code %lu%s.", code,
+        if (!delta) appsSay(L"Installer finished, exit code %lu%s.", code,
                 a->kind == KIND_MSI && code == ERROR_SUCCESS_REBOOT_REQUIRED ? L" (a restart finishes it)" : L"");
         if (a->kind == KIND_MSI && code == ERROR_SUCCESS_REBOOT_REQUIRED) code = 0;
         appsProgress(APP_STEP_CLOSE, 0);
@@ -1180,12 +1546,17 @@ static void appsOnDone(DWORD fin) {
         swprintf(g_appsMsg, 400, L"Couldn't find the newest %s from its publisher (error %lu). Nothing was installed.", a->name, detail);
     else if (step == APS_DOWNLOAD)
         swprintf(g_appsMsg, 400, L"Couldn't download %s (error %lu). Check the connection. Nothing was installed.", a->name, detail);
+    else if (step == APS_SIGN && detail == ERROR_INVALID_DATA)
+        swprintf(g_appsMsg, 400, L"The downloaded %s installer didn't match the SHA-256 its publisher lists, so it was deleted and nothing was installed.", a->name);
     else if (step == APS_SIGN)
         swprintf(g_appsMsg, 400, L"The downloaded %s installer isn't signed by %s, so it was deleted and nothing was installed.", a->name, a->signer);
     else if (step == APS_MISSING)
         swprintf(g_appsMsg, 400, L"The %s installer finished, but %s doesn't show as installed.", a->name, a->name);
     else if (step == APS_FOLDER)
         swprintf(g_appsMsg, 400, L"Couldn't make a folder for the download (error %lu). Nothing was installed.", detail);
+    else if (step == APS_SAME)
+        swprintf(g_appsMsg, 400, L"%s's newer version is still being rolled out, and right now only %s is offered. Nothing was changed; try Update again later.",
+                 a->name, g_appsVer[app]);
     else
         swprintf(g_appsMsg, 400, L"The %s installer stopped with code %lu.", a->name, detail);
     appsLogAdd(g_appsMsg, FALSE);
@@ -1270,19 +1641,22 @@ static void appsIdmOfferReg(void) {
     InvalidateRect(g_hwnd, NULL, FALSE);
 }
 
+#include "gpu.c"
+
 // ---------- the page ----------
 static void appsDrawLog(int cL, int cR, int oTop, const wchar_t* now);
 static void drawApps(int cL, int cR) {
     int pad = dp(16), top = pad;
     Col sf = surfaceCol();
-    int x1 = cL + dp(20), x2 = cR - dp(20), bh = dp(36), bw = dp(200), rowGap = dp(10);
+    int x1 = cL + dp(20), x2 = cR - dp(20), bh = dp(30), bw = dp(172), rowGap = dp(6);   // compact, so the log below has room
     int noteH = dp(56);
-    int cardB = top + dp(92) + APP_COUNT * (bh + rowGap) + dp(4) + noteH + dp(8);
+    int cardB = top + dp(92) + (APP_COUNT + GPU_N) * (bh + rowGap) + dp(4) + noteH + dp(8);
     fillRoundRect(cL, top, cR, cardB, dp(8), sf.r, sf.g, sf.b, sf.a);
     drawPageHeader(0xE71D, cL, cR, top, L"Install Apps", L"The newest build of each app, installed silently.");
 
     int y = top + dp(92);
     BOOL en = g_busy == 0, shield = !g_elevated;
+    g_aioSmall = TRUE;                   // every button here in the smaller font, so the rows look even
     static const int IDS[APP_COUNT] = { A_P_FIREFOX, A_P_IDM, A_P_POT, A_P_CRD, A_P_NANAZIP, A_P_TAILSCALE };
     for (int i = 0; i < APP_COUNT; i++) {
         // IDM installed: its button reinstalls with the full setup (Update uses IDM's own smaller update)
@@ -1298,7 +1672,7 @@ static void drawApps(int cL, int cR) {
         else if (g_appsVer[i][0]) swprintf(st, 160, L"Installed: %s%s", g_appsVer[i], g_appsChecking ? L" · checking for updates…" : L"");
         else wcscpy(st, L"Not installed");
         // a small Update button at the row's right end, only when a newer version is offered
-        int ubw = dp(76), ubh = dp(28), textR = x2;
+        int ubw = dp(68), ubh = dp(24), textR = x2;
         if (upd) {
             int uy = y + (bh - ubh) / 2;
             aioButton(A_P_UPD0 + i, x2 - ubw, uy, x2, uy + ubh, L"Update", TRUE, en, FALSE);
@@ -1308,6 +1682,8 @@ static void drawApps(int cL, int cR) {
         drawText(g_fSmall, st, r, upd ? textRGB() : mutedRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
         y += bh + rowGap;
     }
+    gpuDrawRows(x1, x2, bw, bh, rowGap, &y);
+    g_aioSmall = FALSE;
     y += dp(4);
     RECT n1 = { x1, y, x2, y + noteH };
     drawText(g_fSmall, L"Installed silently from the publisher, signature checked, with one shortcut in Start Menu and none on the desktop. "
@@ -1316,7 +1692,8 @@ static void drawApps(int cL, int cR) {
              n1, mutedRGB(), DT_LEFT | DT_WORDBREAK);
 
     wchar_t now[200] = L"";
-    if (g_appsRun >= 0) {
+    if (gpuNowText(now, 200)) {}
+    else if (g_appsRun >= 0) {
         const wchar_t* name = APPS[g_appsRun].name;
         switch (g_appsStep) {
         case APP_STEP_LINK:     swprintf(now, 200, L"%s: finding the newest build…", name); break;
@@ -1355,8 +1732,42 @@ static void appsLogDragTo(int y) {
     g_logFollow = g_logTop >= maxTop;
     InvalidateRect(g_hwnd, NULL, FALSE);
 }
+// Links in the log: underlined, and a click copies the whole link (also when it wraps onto a second row)
+#define LOG_LINKS 64
+#define TIMER_LOGCOPIED 11
+typedef struct { RECT rc; wchar_t url[APPS_LOG_LINE]; } LogLink;
+static LogLink g_logLinks[LOG_LINKS];
+static int g_logLinkN = 0;
+static ULONGLONG g_logCopiedAt = 0;
+
+// The next link in s at or after from: [*us, *ue). FALSE if there's none.
+static BOOL appsLogLink(const wchar_t* s, int from, int* us, int* ue) {
+    const wchar_t* a = wcsstr(s + from, L"https://");
+    const wchar_t* b = wcsstr(s + from, L"http://");
+    if (!a || (b && b < a)) a = b;
+    if (!a) return FALSE;
+    int e = (int)(a - s);
+    while (s[e] && s[e] != L' ' && s[e] != L'"' && s[e] != L'\'' && s[e] != L'<' && s[e] != L'>') e++;
+    while (e > a - s && wcschr(L".,;:)]", s[e - 1])) e--;       // the sentence's punctuation isn't part of it
+    *us = (int)(a - s); *ue = e;
+    return e - *us > 8;
+}
+static const wchar_t* appsLogLinkAt(int x, int y) {
+    POINT p = { x, y };
+    for (int i = 0; i < g_logLinkN; i++) if (PtInRect(&g_logLinks[i].rc, p)) return g_logLinks[i].url;
+    return NULL;
+}
+
 static BOOL appsLogMouseDown(int x, int y) {
     POINT p = { x, y };
+    const wchar_t* url = appsLogLinkAt(x, y);
+    if (url) {
+        copyText(url);
+        g_logCopiedAt = GetTickCount64();
+        SetTimer(g_hwnd, TIMER_LOGCOPIED, 2500, NULL);    // the notice goes after a while
+        InvalidateRect(g_hwnd, NULL, FALSE);
+        return TRUE;
+    }
     if (g_logRows <= g_logVisible || !PtInRect(&g_rcLogBar, p)) return FALSE;
     int span = (g_rcLogBar.bottom - g_rcLogBar.top) - g_logThumbH, maxTop = g_logRows - g_logVisible;
     int ty = g_rcLogBar.top + (maxTop > 0 ? (int)((long long)span * g_logTop / maxTop) : 0);
@@ -1373,12 +1784,23 @@ static void appsDrawLog(int cL, int cR, int oTop, const wchar_t* now) {
     Col sf = surfaceCol();
     int oB = g_bh - pad, hdrH = dp(32);
     SetRectEmpty(&g_rcLogBox); SetRectEmpty(&g_rcLogBar);
+    g_logLinkN = 0;
     if (oB - oTop < hdrH + dp(30)) return;
     fillRoundRect(cL, oTop, cR, oB, dp(8), sf.r, sf.g, sf.b, sf.a);
     RECT oh = { x1, oTop, x1 + dp(80), oTop + hdrH };
     BOOL off = termOff();
     drawText(g_fBodyBold, L"Progress", oh, off ? mutedRGB() : textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    RECT os = { oh.right + dp(8), oTop, x2, oTop + hdrH };
+    int statusR = x2;
+    if (g_logCopiedAt && GetTickCount64() - g_logCopiedAt < 2400) {     // the notice after a link was clicked
+        const wchar_t* note = L"Link copied to the clipboard";
+        int w = textWidth(g_fSmall, note), gw = dp(22);
+        RECT nr = { x2 - w, oTop, x2, oTop + hdrH };
+        COLORREF ok = noteGreen();
+        drawGlyph(g_fIcon, 0xE73E, x2 - w - gw / 2 - dp(2), oTop + hdrH / 2, ok);   // a tick
+        drawText(g_fSmall, note, nr, ok, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+        statusR = x2 - w - gw - dp(12);
+    }
+    RECT os = { oh.right + dp(8), oTop, statusR, oTop + hdrH };
     drawText(g_fSmall, off ? L"" : now, os, g_accent, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
 
     RECT box = { cL + dp(12), oTop + hdrH, cR - dp(12), oB - dp(12) };
@@ -1432,6 +1854,22 @@ static void appsDrawLog(int cL, int cR, int oTop, const wchar_t* now) {
         RECT rr = { tl, tt + (r - first) * rowH, tr, tt + (r - first + 1) * rowH };
         COLORREF c = (s[0] == L'>' && s[1] == L' ') ? g_accent : textRGB();
         drawText(g_fMono, seg, rr, c, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        // the links on this row: underlined, and remembered for clicks
+        int rs = rows[r].start, re = rs + rows[r].len, us, ue;
+        for (int from = 0; appsLogLink(s, from, &us, &ue); from = ue) {
+            int a = max(us, rs), b = min(ue, re);
+            if (a >= b) { if (us >= re) break; continue; }
+            int lx = tl + textWidthN(g_fMono, seg, ind + a - rs), rx = tl + textWidthN(g_fMono, seg, ind + b - rs);
+            int uy = rr.top + (rowH + dp(13)) / 2;                     // just under the text
+            fillRect(lx, uy, rx, uy + max(1, dp(1)), GetRValue(c), GetGValue(c), GetBValue(c), 0.85);
+            if (g_logLinkN < LOG_LINKS) {
+                LogLink* k = &g_logLinks[g_logLinkN++];
+                k->rc = (RECT){ lx, rr.top, rx, rr.bottom };
+                int n = min(ue - us, APPS_LOG_LINE - 1);
+                wmemcpy(k->url, s + us, n);
+                k->url[n] = 0;
+            }
+        }
     }
     LeaveCriticalSection(&g_lock);
 

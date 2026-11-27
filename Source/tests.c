@@ -999,6 +999,70 @@ int wmain(void) {
         }
     }
 
+    // app update: which releases count as newer, and the release notes as the dialog shows them
+    {
+        BOOL newer = suNewer(WCU_VER_MAJOR, WCU_VER_MINOR + 1) && suNewer(WCU_VER_MAJOR + 1, 0) &&
+                     !suNewer(WCU_VER_MAJOR, WCU_VER_MINOR) && !suNewer(WCU_VER_MAJOR, WCU_VER_MINOR - 1) && !suNewer(WCU_VER_MAJOR - 1, 99);
+        const char* json = "\"## What's new in v1.13\\r\\n\\r\\n### Install Apps\\r\\n- **Bold** and `code`\\r\\n* Star item\\r\\n\\r\\n"
+                           "### Misc Tweaks\\r\\nPlain line\\r\\n\\r\\n## Download\\r\\nNot shown\\r\\n\"";
+        wchar_t* t = suNotesText(json);
+        const wchar_t* want = L"Install Apps\n\x2022 Bold and code\n\x2022 Star item\n\nMisc Tweaks\nPlain line";
+        BOOL notes = t && !wcscmp(t, want);
+        if (!notes) wprintf(L"  notes: [%s]\n", t ? t : L"(null)");
+        free(t);
+        BOOL ok = newer && notes;
+        wprintf(L"app update test: %s (newer %d notes %d)\n", ok ? L"PASS" : L"FAIL", newer, notes);
+        filePass = filePass && ok;
+    }
+
+    // Chrome Remote Desktop: the package Google's update service offers downloads and matches the SHA-256 it lists
+    {
+        wchar_t url[600], tmp[MAX_PATH], hex[65]; DWORD e = 0, status = 0;
+        BOOL ok = appsResolveUrl(APP_CRD, url, 600, &e) && g_appsSha[0] && g_appsOffered[0];
+        if (ok) {
+            GetTempPathW(MAX_PATH, tmp);
+            wcscat(tmp, L"wcu_crd_test.msi");
+            ok = !dlHttpCore(url, NULL, tmp, &status, FALSE, NULL, NULL) && status == 200 && dlSha256(tmp, hex) && !_wcsicmp(hex, g_appsSha);
+            DeleteFileW(tmp);
+        }
+        wprintf(L"crd offer test: %s (%s %s)\n", ok ? L"PASS" : L"FAIL", g_appsOffered, url);
+        filePass = filePass && ok;
+    }
+
+    // GPU drivers: the hotfix search finds the real 621.35 above 621.24, and AMD's pages give a driver for a laptop Radeon,
+    // an old Polaris card and (through the processor's page) this PC's Ryzen graphics
+    {
+        ULONGLONG t0 = GetTickCount64();
+        NvProbe pr = { 621, 25, 36, 25, -1 };
+        HANDLE t[8]; int nt = 0;
+        for (int i = 0; i < 8; i++) if ((t[nt] = CreateThread(NULL, 0, gpuNvProbeProc, &pr, 0, NULL)) != NULL) nt++;
+        WaitForMultipleObjects(nt, t, TRUE, INFINITE);
+        for (int i = 0; i < nt; i++) CloseHandle(t[i]);
+        BOOL hf = pr.best == 35;
+        wprintf(L"  hotfix search 621.25-621.36: best %ld in %llu ms\n", pr.best, GetTickCount64() - t0);
+        static const wchar_t* NAMES[] = { L"AMD Radeon RX 7600M XT", L"Radeon RX 580 Series", L"AMD Radeon(TM) Graphics", L"AMD Radeon(TM) Graphics" };
+        static const wchar_t* CPUS[] = { L"", L"", L"AMD Ryzen 7 7840U w/ Radeon 780M Graphics", L"AMD Ryzen 9 9950X 16-Core Processor" };
+        BOOL amd = TRUE;
+        for (int i = 0; i < 4; i++) {
+            lstrcpynW(g_gpuCpuTest, CPUS[i], 128);
+            memset(&g_gpu[GPU_AMD], 0, sizeof(GpuInfo));
+            g_gpu[GPU_AMD].found = TRUE;
+            lstrcpynW(g_gpu[GPU_AMD].name, NAMES[i], 128);
+            GpuOffer o; memset(&o, 0, sizeof(o));
+            gpuAmdLookup(&o);
+            BOOL ok = !o.err[0] && o.n >= 1 && !wcsncmp(o.c[0].url, L"https://drivers.amd.com/", 24) && o.c[0].ver[0];
+            wprintf(L"  amd %s: %s %s %s\n", NAMES[i], ok ? L"ok" : L"FAIL", o.err[0] ? o.err : o.c[0].label, o.n ? o.c[0].file : L"");
+            amd = amd && ok;
+        }
+        EnterCriticalSection(&g_lock);
+        for (int i = 0; i < g_appsLogN; i++) wprintf(L"  | %s\n", g_appsLog[i]);
+        g_appsLogN = 0;
+        LeaveCriticalSection(&g_lock);
+        BOOL ok = hf && amd;
+        wprintf(L"gpu driver test: %s (hotfix %d amd %d)\n", ok ? L"PASS" : L"FAIL", hf, amd);
+        filePass = filePass && ok;
+    }
+
     BOOL pass = filePass && regPass;
     wprintf(L"%s\n", pass ? L"PASS" : L"FAIL");
     return pass ? 0 : 1;

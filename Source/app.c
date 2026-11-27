@@ -32,6 +32,7 @@
 #include "apps.c"
 #include "office.c"
 #include "remove.c"
+#include "update.c"
 
 // ---------- left navigation rail ----------
 static const wchar_t* NAV_LABEL[NAV_COUNT] = { L"Disk Clean-up", L"Reg Networks", L"Run as TI", L"Manual Updates", L"Windows AIO", L"Windows Repair", L"Misc Tweaks",
@@ -76,7 +77,10 @@ static void drawRail(int L, int R, int top, int bottom) {
     fillHover(lb.left, lb.top, lb.right, lb.bottom, dp(4), 2 * anim(ANIM_LANG, g_hotBtn == BTN_LANG));
     drawGlyph(g_fIcon, 0xE774, (lb.left + lb.right) / 2, (lb.top + lb.bottom) / 2, textRGB());
 
+    // The three buttons at the bottom take 128; on a short window the rail's items get a little shorter to leave them room
     int y = top + dp(58), itemH = dp(38), gap = dp(4);
+    int fit = (bottom - dp(8) - dp(36 * 3 + 6 * 2) - dp(8) - y + gap) / NAV_COUNT;
+    if (fit < itemH + gap) itemH = max(dp(30), fit - gap);
     for (int i = 0; i < NAV_COUNT; i++) {
         RECT it = { L + dp(8), y, R - dp(8), y + itemH };
         g_rcNav[i] = it;
@@ -111,6 +115,8 @@ static void drawRail(int L, int R, int top, int bottom) {
     g_rcUsbBoot = b;
     drawButtonFace(b, dp(6), FALSE, anim(ANIM_BTN + BTN_USBBOOT, g_hotBtn == BTN_USBBOOT && en), en ? 1.0 : 0.4);
     drawButtonLabel(b, g_fBody, L"Boot to USB", en ? textRGB() : mutedRGB(), !g_elevated, dp(16), dp(6));
+    OffsetRect(&b, 0, -dp(36 + 6));
+    suDrawButton(b);                  // on only when GitHub has a newer release
 }
 
 static void render(void) {
@@ -196,7 +202,7 @@ static void applyFade(void) {
         focusNone();
         if (g_page == PAGE_REGNET) regFocusBox();
         if (g_page == PAGE_TWEAKS) tweaksRefresh();
-        if (g_page == PAGE_APPS && g_appsRun < 0) { appsRefresh(); appsCheckLatest(FALSE); }
+        if (g_page == PAGE_APPS && g_appsRun < 0) { appsRefresh(); appsCheckLatest(FALSE); if (g_gpuRun < 0) { gpuRefresh(); gpuCheckLatest(); } }
         if (g_page == PAGE_OFFICE) offRefresh();
         if (g_page == PAGE_REMOVE) rmRefresh();
     }
@@ -217,6 +223,7 @@ static int hitButton(int x, int y) {
     POINT p = { x, y };
     if (PtInRect(&g_rcUefi, p)) return BTN_UEFI;
     if (PtInRect(&g_rcUsbBoot, p)) return BTN_USBBOOT;
+    if (PtInRect(&g_rcSelfUpd, p)) return BTN_SELFUPD;
     if (PtInRect(&g_rcTheme, p)) return BTN_THEME;
     if (PtInRect(&g_rcLang, p)) return BTN_LANG;
     if (g_page == PAGE_AIO || g_page == PAGE_REPAIR || g_page == PAGE_TWEAKS || g_page == PAGE_RUNTI || g_page == PAGE_DOWNLOAD || g_page == PAGE_APPS || g_page == PAGE_OFFICE || g_page == PAGE_REMOVE) {
@@ -393,6 +400,8 @@ static void aioClick(int id, int x, int y) {
     case A_P_CRD:     appsClick(APP_CRD); break;
     case A_P_NANAZIP: appsClick(APP_NANAZIP); break;
     case A_P_TAILSCALE: appsClick(APP_TAILSCALE); break;
+    case A_P_NVIDIA:  gpuClick(GPU_NV); break;
+    case A_P_AMD:     gpuClick(GPU_AMD); break;
     case A_P_UPD0: case A_P_UPD0 + 1: case A_P_UPD0 + 2: case A_P_UPD0 + 3: case A_P_UPD0 + 4: case A_P_UPD0 + 5:
         appsUpdateClick(id - A_P_UPD0); break;
     case A_T_EXPLORE: case A_T_GALLERY: case A_T_VBS: case A_T_RDP: case A_T_MAPDELAY: case A_T_WUDRV: case A_T_THEME: case A_T_REGION: case A_T_ANNOY:
@@ -421,6 +430,7 @@ static void onLeftButtonUp(int x, int y) {
         else if (b == BTN_REGPURGE) doPurgeNetworks();
         else if (b == BTN_UEFI && g_busy == 0) bootToFirmware();
         else if (b == BTN_USBBOOT && g_busy == 0) bootToUsb();
+        else if (b == BTN_SELFUPD) suClick();
         else if (b == BTN_DISM && g_busy == 0) doDismInstall();
         else if (b == BTN_UPDGET) updClicked(UPD_MSU);
         else if (b == BTN_UPDNDP) updClicked(UPD_NDP);
@@ -443,6 +453,64 @@ static void onLeftButtonUp(int x, int y) {
         }
     }
     g_pressBtn = -1;
+}
+
+// The job that closing the app (or updating it, which closes it) would lose track of: its dialog title, and in *body
+// what to do. NULL when nothing is running.
+static const wchar_t* jobRunningTitle(const wchar_t** body) {
+    if (g_suState == SU_WORKING) {
+        *body = L"Wait for the update to finish. The app restarts by itself.";
+        return L"The app is updating";
+    }
+    if (g_gpuRun >= 0) {
+        *body = g_gpuStep == 2 ? L"Press Cancel download on the Install Apps page first, or wait for it to finish."
+                               : L"Wait for the driver lookup on the Install Apps page to finish.";
+        return L"Driver still downloading";
+    }
+    if (g_dismRunning) {
+        *body = L"Wait for the update to finish before closing the app.";
+        return L"Update still installing";
+    }
+    if (g_updState != UPD_IDLE) {
+        *body = L"Press Cancel download on the Manual Updates page first, or wait for it to finish.";
+        return L"Update still downloading";
+    }
+    if (g_offJob != OFFJ_NONE) {
+        *body = g_offJob == OFFJ_DOWNLOAD ? L"Press Cancel on the MS Office 365 page first, or wait for the download to finish."
+                                          : L"Wait for the install on the MS Office 365 page to finish before closing the app.";
+        return g_offJob == OFFJ_DOWNLOAD ? L"Office is still downloading" : L"Office is still installing";
+    }
+    if (g_rmJob) {
+        *body = L"Wait for the job on the Remove Apps page to finish before closing the app.";
+        return g_rmRemoving ? L"Still removing apps" : L"Still installing apps";
+    }
+    if (g_appsRun >= 0) {
+        *body = L"Wait for the install on the Install Apps page to finish before closing the app.";
+        return L"Still installing";
+    }
+    if (g_tiRunning) {
+        *body = L"Wait for the program or import on the Run as TI page to finish before closing the app.";
+        return L"Still running as TrustedInstaller";
+    }
+#if WCU_DOWNLOAD
+    if (g_repRunning && g_repJob == REP_UUP) {
+        *body = L"Press Cancel on the Download Windows page first, or wait for the ISO to finish.";
+        return L"Windows is still downloading";
+    }
+#endif
+    if (g_repRunning && g_repJob == REP_ESDISO) {
+        *body = L"Press Cancel on the ESD to ISO tab of Windows AIO first, or wait for the ISO to finish.";
+        return L"Still making the ISO";
+    }
+    if (g_repRunning) {
+        *body = L"Wait for the repair to finish before closing the app. It can't be cancelled once it starts.";
+        return L"Repair still running";
+    }
+    if (g_aioRunning) {
+        *body = L"Wait for the current Windows AIO task to finish, or stop it first.";
+        return L"Still working";
+    }
+    return NULL;
 }
 
 static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
@@ -501,6 +569,8 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
 
     case WM_TIMER:
         if (w == TIMER_RAISE) { raiseTick(h); return 0; }
+        if (w == TIMER_SUCHECK) { suCheck(); return 0; }
+        if (w == TIMER_LOGCOPIED) { KillTimer(h, w); InvalidateRect(h, NULL, FALSE); return 0; }
         InvalidateRect(h, NULL, FALSE);
         return 0;
 
@@ -546,6 +616,10 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         if (LOWORD(l) == HTCLIENT && pageHasFields()) {
             POINT p; GetCursorPos(&p); ScreenToClient(h, &p);
             if (aioOverField(p.x, p.y)) { SetCursor(LoadCursor(NULL, IDC_IBEAM)); return TRUE; }
+        }
+        if (LOWORD(l) == HTCLIENT && (g_page == PAGE_APPS || g_page == PAGE_OFFICE || g_page == PAGE_REMOVE)) {
+            POINT p; GetCursorPos(&p); ScreenToClient(h, &p);
+            if (appsLogLinkAt(p.x, p.y)) { SetCursor(LoadCursor(NULL, IDC_HAND)); return TRUE; }   // a link in the log
         }
         break;
 
@@ -610,6 +684,27 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_APP_RMDONE:
         rmOnDone(w != 0, (RmList*)l);
         return 0;
+    case WM_APP_GPUFOUND:
+        gpuOnFound((GpuOffer*)l);
+        return 0;
+    case WM_APP_GPULATEST:
+        gpuOnLatest((wchar_t*)l);
+        return 0;
+    case WM_APP_GPUDONE:
+        gpuOnDone((DWORD)w, (DWORD)l);
+        return 0;
+    case WM_APP_SUFOUND:
+        suOnFound((SuInfo*)l);
+        return 0;
+    case WM_APP_SUPROG:
+        InvalidateRect(h, NULL, FALSE);
+        return 0;
+    case WM_APP_SUDONE:
+        suOnDone((DWORD)w);
+        return 0;
+    case WM_APP_SUTRAY:
+        suOnTray(l);
+        return 0;
     case WM_COPYDATA:                    // the Install Apps and Office helpers' progress lines
         if (appsOnCopyData((const COPYDATASTRUCT*)l)) return TRUE;
         break;
@@ -639,61 +734,12 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         if (w && g_page == PAGE_TWEAKS && g_twAct < 0) tweaksRefresh();
         return 0;
 
-    case WM_CLOSE:                       // closing now would lose track of the running job
-        if (g_dismRunning) {
-            okDialog(L"Update still installing",
-                       L"Wait for the update to finish before closing the app.");
-            return 0;
-        }
-        if (g_updState != UPD_IDLE) {
-            okDialog(L"Update still downloading",
-                       L"Press Cancel download on the Manual Updates page first, or wait for it to finish.");
-            return 0;
-        }
-        if (g_offJob != OFFJ_NONE) {
-            okDialog(g_offJob == OFFJ_DOWNLOAD ? L"Office is still downloading" : L"Office is still installing",
-                       g_offJob == OFFJ_DOWNLOAD ? L"Press Cancel on the MS Office 365 page first, or wait for the download to finish."
-                                                 : L"Wait for the install on the MS Office 365 page to finish before closing the app.");
-            return 0;
-        }
-        if (g_rmJob) {
-            okDialog(g_rmRemoving ? L"Still removing apps" : L"Still installing apps",
-                       L"Wait for the job on the Remove Apps page to finish before closing the app.");
-            return 0;
-        }
-        if (g_appsRun >= 0) {
-            okDialog(L"Still installing",
-                       L"Wait for the install on the Install Apps page to finish before closing the app.");
-            return 0;
-        }
-        if (g_tiRunning) {
-            okDialog(L"Still running as TrustedInstaller",
-                       L"Wait for the program or import on the Run as TI page to finish before closing the app.");
-            return 0;
-        }
-#if WCU_DOWNLOAD
-        if (g_repRunning && g_repJob == REP_UUP) {
-            okDialog(L"Windows is still downloading",
-                       L"Press Cancel on the Download Windows page first, or wait for the ISO to finish.");
-            return 0;
-        }
-#endif
-        if (g_repRunning && g_repJob == REP_ESDISO) {
-            okDialog(L"Still making the ISO",
-                       L"Press Cancel on the ESD to ISO tab of Windows AIO first, or wait for the ISO to finish.");
-            return 0;
-        }
-        if (g_repRunning) {
-            okDialog(L"Repair still running",
-                       L"Wait for the repair to finish before closing the app. It can't be cancelled once it starts.");
-            return 0;
-        }
-        if (g_aioRunning) {
-            okDialog(L"Still working",
-                       L"Wait for the current Windows AIO task to finish, or stop it first.");
-            return 0;
-        }
+    case WM_CLOSE: {                     // closing now would lose track of the running job
+        const wchar_t* body = NULL;
+        const wchar_t* title = jobRunningTitle(&body);
+        if (title) { okDialog(title, body); return 0; }
         break;
+    }
 
     case WM_APP_ADMINSIZE: {
         if (w >= NCAT || !g_cat[w].needsAdmin) return 0;
@@ -738,6 +784,7 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     }
 
     case WM_DESTROY:
+        suTrayRemove();
         PostQuitMessage(0);
         return 0;
     }
@@ -752,6 +799,10 @@ static BOOL runHelperCommand(const wchar_t* cmd, int* exitCode) {
 
     // restart once into a USB drive, or remove that one-time entry again at the next start of Windows
     if (!wcsncmp(cmd, L"--usbboot", 9)) { *exitCode = ubHelperMain(cmd); return TRUE; }
+
+    // put a downloaded update in place of this exe, for a folder that needs administrator rights. Checked ahead of
+    // the flag matches below because the command line holds a file path.
+    if (wcsstr(cmd, L"--self-update=\"")) { *exitCode = suHelperMain(cmd); return TRUE; }
 
     // run a Windows Repair job, sending its output back to the window
     if (!wcsncmp(cmd, L"--repair=", 9)) { *exitCode = repairHelperMain(cmd); return TRUE; }
@@ -888,6 +939,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, PWSTR cmd, int show) {
     initCategories();
     g_srOff = restoreIsOff();
     appsRefresh();
+    gpuRefresh();
 
     WNDCLASSW wc = {0};
     wc.lpfnWndProc = WndProc;
@@ -905,6 +957,12 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, PWSTR cmd, int show) {
     applyWindowTheme(g_hwnd);
     ShowWindow(g_hwnd, show);
     UpdateWindow(g_hwnd);
+
+    // ask GitHub whether there's a newer release, now and every 6 hours; after an update, remove the old exe
+    suCheck();
+    SetTimer(g_hwnd, TIMER_SUCHECK, SU_RECHECK_MS, NULL);
+    HANDLE cleanup = CreateThread(NULL, 0, suCleanupProc, NULL, 0, NULL);
+    if (cleanup) CloseHandle(cleanup);
 
     MSG msg;
     while (GetMessageW(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessageW(&msg); }

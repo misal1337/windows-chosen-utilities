@@ -8,7 +8,7 @@ Set-Location $PSScriptRoot
 $out = 'Windows Chosen Utilities.exe'
 # baseline: without it Zig builds for the CPU doing the build (AVX2 and newer), and the exe crashes at start on PCs without those
 $args = @('cc','app.c','app.rc','-o',$out,'-O2','-municode','-mcpu=baseline',
-  '-ldwmapi','-lgdi32','-luser32','-lshell32','-lole32','-lshlwapi','-lcomdlg32','-ladvapi32','-loleaut32','-luuid','-lvirtdisk','-ld2d1','-ldwrite','-lwinhttp','-lwintrust','-lcrypt32','-lversion',
+  '-ldwmapi','-lgdi32','-luser32','-lshell32','-lole32','-lshlwapi','-lcomdlg32','-ladvapi32','-loleaut32','-luuid','-lvirtdisk','-ld2d1','-ldwrite','-lwinhttp','-lwintrust','-lcrypt32','-lversion','-lsetupapi',
   '-Wl,/subsystem:windows')
 & $zig @args 2>&1 | ForEach-Object { "$_" }
 if ($LASTEXITCODE -ne 0) { throw "build failed ($LASTEXITCODE)" }

@@ -24,7 +24,12 @@ typedef struct {
     int drag;                         // 0 none, 1 dragging the scrollbar thumb, 2 dragging the list itself
     int dragY, dragTop;               // where the drag started, and the first row shown then
     BOOL dragMoved;                   // a press on a row that moved scrolls instead of ticking
+    int bodyTop, bodyShown, bodyFull; // scrollBody: how far the body is scrolled, and its visible and whole heights
 } DlgState;
+
+#define DLG_WIDE 560                  // the width of a dialog with a scrolling body
+#define DLG_BAR  12                   // room kept right of a scrolling body for its thumb
+static BOOL dlgScrolls(const DlgExtra* x) { return x && x->scrollBody; }
 
 #define DLG_CHECK_ROWS 12             // a checklist shows this many rows and scrolls the rest
 
@@ -178,14 +183,31 @@ static void dlgPaint(HWND h, DlgState* d, HDC hdc) {
     y += dp(28) + dp(12);
 
     int inner = W - pad * 2;
-    int bodyH = measureWrapped(g_fBody, d->body, inner);
+    int textW = dlgScrolls(d->x) ? inner - dp(DLG_BAR) : inner;
+    int bodyH = measureWrapped(g_fBody, d->body, textW), bodyFull = bodyH;
     int rowsH = d->nrows ? dp(DLG_ROW) * d->nrows + dp(8) : 0;
     int maxBody = footTop - y - (rowsH ? rowsH + dp(16) : 0) - dp(16);
     if (d->x && d->x->input) maxBody -= dlgExtraHeight(d->x);
     else if (d->x && d->x->nItems) maxBody -= dp(14) + dp(DLG_ROW) * (d->x->checks ? 2 : 1) + dp(8);
     if (bodyH > maxBody) bodyH = maxBody;
-    RECT rb = { pad, y, W - pad, y + bodyH };
-    drawText(g_fBody, d->body, rb, textRGB(), DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
+    d->bodyShown = bodyH; d->bodyFull = bodyFull;
+    if (dlgScrolls(d->x) && bodyFull > bodyH && bodyH > 0) {
+        int maxTop = bodyFull - bodyH;
+        if (d->bodyTop > maxTop) d->bodyTop = maxTop;
+        if (d->bodyTop < 0) d->bodyTop = 0;
+        RECT keep = g_textClip; BOOL keepOn = g_textClipOn;
+        g_textClip = (RECT){ pad, y, pad + textW, y + bodyH }; g_textClipOn = TRUE;
+        RECT rs = { pad, y - d->bodyTop, pad + textW, y - d->bodyTop + bodyFull };
+        drawText(g_fBody, d->body, rs, textRGB(), DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
+        g_textClip = keep; g_textClipOn = keepOn;
+        int th = max(dp(24), (int)((long long)bodyH * bodyH / bodyFull));   // where the visible part is in the whole text
+        int ty = y + (int)((long long)(bodyH - th) * d->bodyTop / maxTop);
+        Col c = textCol();
+        fillRoundRect(W - pad - dp(4), ty, W - pad, ty + th, dp(2), c.r, c.g, c.b, 0.4);
+    } else {
+        RECT rb = { pad, y, pad + textW, y + bodyH };
+        drawText(g_fBody, d->body, rb, textRGB(), DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
+    }
     y += bodyH;
 
     if (d->nrows) {
@@ -365,7 +387,10 @@ static LRESULT CALLBACK DlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         }
         return 0;
     case WM_MOUSEWHEEL:
-        if (d && d->x && d->x->nItems) {
+        if (d && dlgScrolls(d->x)) {
+            d->bodyTop -= GET_WHEEL_DELTA_WPARAM(w) * dp(60) / WHEEL_DELTA;   // the painter keeps it in range
+            InvalidateRect(h, NULL, FALSE);
+        } else if (d && d->x && d->x->nItems) {
             d->itemTop += GET_WHEEL_DELTA_WPARAM(w) > 0 ? -1 : 1;       // the painter keeps it in range
             InvalidateRect(h, NULL, FALSE);
         }
@@ -460,6 +485,17 @@ static LRESULT CALLBACK DlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     }
     case WM_KEYDOWN:
         if (d->x && d->x->input && dlgEditKey(h, d, w)) return 0;
+        if (dlgScrolls(d->x) && (w == VK_UP || w == VK_DOWN || w == VK_PRIOR || w == VK_NEXT || w == VK_HOME || w == VK_END)) {
+            int page = max(dp(40), d->bodyShown - dp(40));
+            if (w == VK_UP) d->bodyTop -= dp(40);
+            else if (w == VK_DOWN) d->bodyTop += dp(40);
+            else if (w == VK_PRIOR) d->bodyTop -= page;
+            else if (w == VK_NEXT) d->bodyTop += page;
+            else if (w == VK_HOME) d->bodyTop = 0;
+            else d->bodyTop = d->bodyFull;
+            InvalidateRect(h, NULL, FALSE);
+            return 0;
+        }
         if (d->x && d->x->nItems && (w == VK_UP || w == VK_DOWN)) {
             dlgMovePick(h, d, *d->x->pick + (w == VK_UP ? -1 : 1));
             return 0;
@@ -508,8 +544,8 @@ static int showDialogEx(HWND owner, const wchar_t* title, const wchar_t* body,
     if (extra && extra->nItems) d.itemTop = *extra->pick;              // the painter pulls this back into range
 
     // size to the content, clamped to the screen (the footer stays reachable, long bodies clip)
-    int W = dp(DLG_WIDTH), pad = dp(DLG_PAD);
-    int H = pad + dp(28) + dp(12) + measureWrapped(g_fBody, body, W - pad * 2)
+    int W = dp(dlgScrolls(extra) ? DLG_WIDE : DLG_WIDTH), pad = dp(DLG_PAD);
+    int H = pad + dp(28) + dp(12) + measureWrapped(g_fBody, body, W - pad * 2 - (dlgScrolls(extra) ? dp(DLG_BAR) : 0))
           + (nrows ? dp(16) + dp(DLG_ROW) * nrows + dp(8) : 0) + dlgExtraHeight(extra) + dp(24) + dp(DLG_FOOTER);
     // A minimized window is at -32000,-32000: the dialog would open off the screen with the window disabled behind
     // it, so the app looks hung.
@@ -520,6 +556,7 @@ static int showDialogEx(HWND owner, const wchar_t* title, const wchar_t* body,
     RECT cr = wa;
     if (owner && !IsIconic(owner)) GetWindowRect(owner, &cr);
     if (H > (wa.bottom - wa.top) - dp(48)) H = (wa.bottom - wa.top) - dp(48);
+    if (dlgScrolls(extra) && H > (wa.bottom - wa.top) * 3 / 4) H = (wa.bottom - wa.top) * 3 / 4;   // long text scrolls instead
     int x = cr.left + ((cr.right - cr.left) - W) / 2;
     int y = cr.top + ((cr.bottom - cr.top) - H) / 2;
     x = max(wa.left, min(x, wa.right - W));      // always wholly on the window's monitor

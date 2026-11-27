@@ -1,4 +1,4 @@
-# Windows Chosen Utilities v1.11
+# Windows Chosen Utilities v1.12
 
 [![Download](https://img.shields.io/badge/Download-exe-0078D4?style=for-the-badge)](https://github.com/misal1337/windows-chosen-utilities/releases/latest)
 [![Latest release](https://img.shields.io/github/v/release/misal1337/windows-chosen-utilities?style=for-the-badge&label=version)](https://github.com/misal1337/windows-chosen-utilities/releases)
@@ -54,12 +54,19 @@ and run it. Nothing is installed.
 - **Download Windows**: builds a bootable x64 or Arm64 ISO from Microsoft's files via UUP dump, with the
   editions, language and preinstalled apps you choose, in Documents or a work folder you pick.
 - **Install Apps**: silent installs and updates of Firefox, IDM, PotPlayer, Chrome Remote Desktop, NanaZip and
-  Tailscale, with signature checks and tidy Start menu shortcuts.
+  Tailscale, with signature checks and tidy Start menu shortcuts. **Download NVIDIA driver** and **Download AMD
+  driver** find the newest driver for the graphics in this PC (desktop or laptop) and save it where you choose,
+  without installing it: NVIDIA's Game Ready Driver, or a newer hotfix when there is one; AMD's Recommended driver,
+  or a newer Optional one.
 - **MS Office 365**: downloads Microsoft 365 Apps (x64) from the Office CDN, installs the apps you pick, and
   switches between the Current, Beta and Dev Main channels.
 - **Remove Apps**: removes the apps that come with Windows for your account, or brings them back.
 - **Boot to USB** and **Boot to UEFI BIOS** (bottom of the rail): restart straight into a bootable USB stick, or into
   the firmware settings.
+- **Update** (bottom of the rail): turns on only when a newer release is out here, and Windows shows a notification
+  then. It shows what's new, downloads the release's exe, checks it against the SHA-256 GitHub lists, swaps it in
+  place of the running exe (same name and folder) and restarts. A folder that needs administrator rights asks
+  through UAC first.
 
 ## Notes
 - The exe is not code-signed, so SmartScreen may warn you on first launch: *More info → Run anyway*.
@@ -80,11 +87,15 @@ user or the person installing or operating it.
 
 It collects no data and has no telemetry. When you use these features it connects to the services they need, whose
 own privacy policies apply:
+- **Update check:** GitHub's API, at start and every 6 hours while open, to read this repository's latest release.
+  Nothing about you or your PC is sent with it. Pressing Update downloads the release's exe from GitHub.
 - **Download Windows, Manual Updates:** [UUP dump](https://uupdump.net) and Microsoft's update servers.
 - **Windows AIO → ESD to ISO:** GitHub, to fetch abbodi1406's [esd-decrypter-wimlib](https://github.com/abbodi1406/BatUtil).
 - **MS Office 365:** Microsoft's Office CDN. Opening this page checks it for the newest builds.
 - **Install Apps:** the publishers' download servers (Mozilla, Internet Download Manager, PotPlayer/Kakao, Google,
   Tailscale) and the Microsoft Store for NanaZip. Opening this page checks those servers for the newest versions.
+  The driver buttons ask NVIDIA's driver lookup and download server, or amd.com, only when pressed; the graphics
+  card's model name is part of that question.
 
 ## What it changes on your PC
 Each page says what its buttons do before you press them, and changes that need administrator rights ask through
@@ -105,6 +116,11 @@ MIT; see [LICENSE](LICENSE). Two small parts come from other MIT-licensed projec
 ## Changelog
 Highlights only. Every release's full notes are on the [Releases page](https://github.com/misal1337/windows-chosen-utilities/releases).
 
+- **v1.12** (27 Nov 2026): the app updates itself: an Update button in the rail and a Windows notification when a
+  newer release is out, with what's new before it updates. Install Apps downloads the newest NVIDIA or AMD graphics
+  driver for this PC (Game Ready or a newer hotfix; Recommended or a newer Optional), Chrome Remote Desktop updates
+  to the version Google is rolling out, and links in the log copy with a click. Firefox updates with Mozilla's small
+  delta update when one exists for the installed build.
 - **v1.11** (26 Nov 2026): Download Windows gets a Work folder choice, edition names in the ISO's name, steadier
   progress, and the time taken plus this PC's specs in the log. IDM updates with its own update file.
 - **v1.10** (25 Nov 2026): Download Windows shows progress, elapsed time and time left. Russian added.

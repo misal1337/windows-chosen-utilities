@@ -13,7 +13,7 @@ enum { A_NONE = 0, A_TAB0, A_TABLAST = A_TAB0 + AT_COUNT - 1,
        A_R_SFC, A_R_SCAN, A_R_RESTORE, A_R_WIM, A_R_RS, A_R_WUC, A_R_COPY, A_R_TOGGLE, A_T_TERMINAL, A_T_EXPLORE, A_T_GALLERY, A_T_VBS, A_T_RDP, A_T_MAPDELAY, A_T_WUDRV, A_T_THEME, A_T_REGION, A_T_ANNOY,
        A_D_X64, A_D_ARM64, A_D_BOX, A_D_FIND, A_D_ED0, A_D_EDLAST = A_D_ED0 + 11,
        A_D_V0, A_D_VLAST = A_D_V0 + 3, A_D_LANG, A_D_APPS, A_D_CLEAN, A_D_GO, A_D_CANCEL, A_D_WORK, A_D_WORKDEF,
-       A_P_FIREFOX, A_P_IDM, A_P_POT, A_P_CRD, A_P_NANAZIP, A_P_TAILSCALE, A_P_UPD0, A_P_UPDLAST = A_P_UPD0 + 7,
+       A_P_FIREFOX, A_P_IDM, A_P_POT, A_P_CRD, A_P_NANAZIP, A_P_TAILSCALE, A_P_UPD0, A_P_UPDLAST = A_P_UPD0 + 7, A_P_NVIDIA, A_P_AMD,
        A_O_CUR, A_O_BETA, A_O_DEV, A_O_LANG, A_O_DOWNLOAD, A_O_CANCEL, A_O_SRC, A_O_ICUR, A_O_IBETA, A_O_IDEV, A_O_IAPPS, A_O_INSTALL, A_O_SW0, A_O_SW1, A_O_SW2,
        A_X_WINAPP, A_X_GAMING, A_X_ALL, A_X_NONE, A_X_LIST, A_X_INSTALL, A_X_UNINSTALL,
        A_COUNT };
@@ -57,6 +57,7 @@ static BOOL aioOverField(int x, int y) {
     return FALSE;
 }
 
+static BOOL g_aioSmall = FALSE;      // a page whose buttons all use the smaller font, so they look even (Install Apps)
 static void aioButton(int id, int l, int t, int r, int b, const wchar_t* text, BOOL primary, BOOL en, BOOL shield) {
     RECT rc = { l, t, r, b };
     if (en) aioRegister(id, rc, NULL, 0, FALSE);
@@ -64,7 +65,7 @@ static void aioButton(int id, int l, int t, int r, int b, const wchar_t* text, B
     COLORREF tc = primary ? RGB(255,255,255) : (en ? textRGB() : mutedRGB());
     // a label that wouldn't leave some room at both ends (such as one with the UAC shield) uses the smaller font
     int need = textWidth(g_fBody, text) + (shield ? dp(22) : 0) + dp(20);
-    drawButtonLabel(rc, need > r - l ? g_fSmall : g_fBody, text, tc, shield, dp(16), dp(6));
+    drawButtonLabel(rc, g_aioSmall || need > r - l ? g_fSmall : g_fBody, text, tc, shield, dp(16), dp(6));
 }
 static void aioField(int id, RECT rc, wchar_t* buf, int cch, BOOL ro, const wchar_t* hint) {
     aioRegister(id, rc, buf, cch, ro);

@@ -66,6 +66,13 @@
 #define WM_APP_OFFDONE    (WM_APP + 33) // MS Office 365: a download or install ended; wParam = 0 or an error, lParam = folder or NULL
 #define WM_APP_OFFVER     (WM_APP + 34) // MS Office 365: after a switch, Office's build changed (or the wait ended); lParam = malloc'd build or NULL
 #define WM_APP_RMDONE     (WM_APP + 35) // Remove Apps: wParam = 1 if an install/uninstall ended; lParam = malloc'd installed flags or NULL
+#define WM_APP_SUFOUND    (WM_APP + 36) // app update: the latest release was looked up; lParam = malloc'd SuInfo or NULL
+#define WM_APP_SUPROG     (WM_APP + 37) // app update: download progress changed (g_suPct)
+#define WM_APP_SUDONE     (WM_APP + 38) // app update: wParam = 0 once the new exe is in place, or an error
+#define WM_APP_SUTRAY     (WM_APP + 39) // app update: the notification's icon was clicked, or its balloon closed
+#define WM_APP_GPUFOUND   (WM_APP + 40) // Install Apps: a GPU driver lookup ended; lParam = malloc'd GpuOffer or NULL
+#define WM_APP_GPUDONE    (WM_APP + 41) // Install Apps: a GPU driver download ended; wParam = 0 or an error, lParam = HTTP status
+#define WM_APP_GPULATEST  (WM_APP + 42) // Install Apps: newest GPU drivers looked up; lParam = a malloc'd list for the window to free
 
 // ---- category kinds ----
 enum { KIND_FOLDER, KIND_RECYCLEBIN, KIND_PATTERN, KIND_RESTORE_OLD, KIND_RESTORE_ALL };
@@ -112,6 +119,7 @@ typedef struct {
     BOOL (*check)(const wchar_t* text, wchar_t* err, int errCch);   // on the primary button: FALSE keeps it open, showing err
     const wchar_t* const* items; int nItems; int* pick;
     BOOL* checks;                   // one per item, toggled in place; adds Select all and Select none
+    BOOL scrollBody;                // a wider dialog whose long body scrolls (wheel, arrows, Page Up/Down)
 } DlgExtra;
 static int showDialog(HWND owner, const wchar_t* title, const wchar_t* body,
                       const DlgRow* rows, int nrows,
@@ -174,9 +182,9 @@ static RECT g_rcTheme, g_rcLang;
 enum { ANIM_BTN = 0, ANIM_ROW = 10, ANIM_CHK = 20, ANIM_NAV = 30, ANIM_NAVSEL = 46, ANIM_DIM = 62, ANIM_DLG = 63,
        ANIM_TAB = 66, ANIM_WROW = 74, ANIM_DROW = 90, ANIM_AIO = 100, ANIM_AIOF = 280, ANIM_MOPT = 460,
        ANIM_VIEW = 470, ANIM_SROFF = 480, ANIM_SROFFH = 481,
-       ANIM_XROW = 482, ANIM_XCHK = 506, ANIM_LANG = 554, ANIM_MAX = 555 };
+       ANIM_XROW = 482, ANIM_XCHK = 506, ANIM_LANG = 554, ANIM_SELFUPD = 555, ANIM_MAX = 556 };
 #define ANIM_XROW_N (ANIM_XCHK - ANIM_XROW)   // Remove Apps: hover of each visible list row
-#define ANIM_XCHK_N (ANIM_LANG - ANIM_XCHK)    // Remove Apps: each app's tick
+#define ANIM_XCHK_N (ANIM_LANG - ANIM_XCHK)    // Remove Apps: each app's tick (ANIM_LANG and ANIM_SELFUPD are one slot each)
 _Static_assert(NAV_COUNT <= ANIM_NAVSEL - ANIM_NAV && NAV_COUNT <= ANIM_DIM - ANIM_NAVSEL, "more rail items than animation slots");
 typedef struct { float v; ULONGLONG t; } AnimSlot;
 static AnimSlot g_animS[ANIM_MAX];
@@ -236,7 +244,7 @@ static Category g_cat[NCAT];
 
 // What hitButton returns. View buttons are BTN_VIEW + row; widgets are BTN_WIDGET + their A_ id.
 enum { BTN_RESCAN = 0, BTN_CLEAN, BTN_REGOPEN, BTN_REGPURGE, BTN_UEFI, BTN_DISM, BTN_THEME, BTN_UPDGET, BTN_UPDNDP, BTN_USBBOOT,
-       BTN_VIEW = 50, BTN_SROFF = 60, BTN_LANG, BTN_WIDGET = 100 };
+       BTN_VIEW = 50, BTN_SROFF = 60, BTN_LANG, BTN_SELFUPD, BTN_WIDGET = 100 };
 
 // layout rects (filled each paint, used for hit testing), in device px
 static RECT g_rcRow[NCAT];

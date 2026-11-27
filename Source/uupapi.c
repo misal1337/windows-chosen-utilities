@@ -114,8 +114,18 @@ static void jText(const char* v, wchar_t* out, int cch) {
 // the file against the checksum UUP dump lists.
 // progress, if given, is told the bytes received so far after each read; returning FALSE stops with ERROR_CANCELLED.
 typedef BOOL (*HttpProgress)(unsigned long long got, void* ctx);
+// The same with a verb (NULL = GET; "HEAD" reads no body), extra request headers ("Name: value\r\n...") and, if given,
+// the length the server announces in *length (0 when it doesn't say).
+static DWORD dlHttpReq(const wchar_t* url, const wchar_t* verb, const wchar_t* headers, char** body, const wchar_t* path,
+                       DWORD* status, unsigned long long* length, BOOL allowHttp, HttpProgress progress, void* ctx);
 static DWORD dlHttpCore(const wchar_t* url, char** body, const wchar_t* path, DWORD* status, BOOL allowHttp,
                         HttpProgress progress, void* ctx) {
+    return dlHttpReq(url, NULL, NULL, body, path, status, NULL, allowHttp, progress, ctx);
+}
+static DWORD dlHttpReq(const wchar_t* url, const wchar_t* verb, const wchar_t* headers, char** body, const wchar_t* path,
+                       DWORD* status, unsigned long long* length, BOOL allowHttp, HttpProgress progress, void* ctx) {
+    BOOL head = verb && !wcscmp(verb, L"HEAD");
+    if (length) *length = 0;
     URL_COMPONENTS u; memset(&u, 0, sizeof(u));
     wchar_t host[256], rest[4096];
     u.dwStructSize = sizeof(u);
@@ -131,23 +141,27 @@ static DWORD dlHttpCore(const wchar_t* url, char** body, const wchar_t* path, DW
     DWORD err = 0;
     HINTERNET s = WinHttpOpen(L"WindowsChosenUtilities", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     HINTERNET c = s ? WinHttpConnect(s, host, u.nPort, 0) : NULL;
-    HINTERNET r = c ? WinHttpOpenRequest(c, L"GET", full, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, secure ? WINHTTP_FLAG_SECURE : 0) : NULL;
+    HINTERNET r = c ? WinHttpOpenRequest(c, verb ? verb : L"GET", full, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, secure ? WINHTTP_FLAG_SECURE : 0) : NULL;
     if (!r) err = GetLastError();
     if (!err) WinHttpSetTimeouts(r, 15000, 15000, 30000, 120000);
-    if (!err && (!WinHttpSendRequest(r, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) || !WinHttpReceiveResponse(r, NULL)))
+    if (!err && (!WinHttpSendRequest(r, headers ? headers : WINHTTP_NO_ADDITIONAL_HEADERS, headers ? (DWORD)-1 : 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+                 !WinHttpReceiveResponse(r, NULL)))
         err = GetLastError();
     if (!err) {
         DWORD cb = sizeof(*status);
         WinHttpQueryHeaders(r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, status, &cb, WINHTTP_NO_HEADER_INDEX);
+        wchar_t cl[32]; cb = sizeof(cl);
+        if (length && WinHttpQueryHeaders(r, WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_HEADER_NAME_BY_INDEX, cl, &cb, WINHTTP_NO_HEADER_INDEX))
+            *length = _wcstoui64(cl, NULL, 10);
     }
     HANDLE f = INVALID_HANDLE_VALUE;
     char* mem = NULL; size_t len = 0, cap = 0;
     unsigned long long total = 0;
-    if (!err && path) {
+    if (!err && path && !head) {
         f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (f == INVALID_HANDLE_VALUE) err = GetLastError();
     }
-    while (!err) {
+    while (!err && !head) {
         char buf[16384]; DWORD got = 0;
         if (!WinHttpReadData(r, buf, sizeof(buf), &got)) { err = GetLastError(); break; }
         if (!got) break;
@@ -201,6 +215,7 @@ typedef struct {
     wchar_t url[4096];
     ULONGLONG urlTick;            // when the link was last replaced
     const wchar_t* path;
+    const wchar_t* headers;       // extra request headers ("Name: value\r\n..."), or NULL
     BOOL allowHttp;
     DlFreshLink fresh;
     void* ctx;
@@ -218,7 +233,7 @@ static DWORD dlSectionTry(DlSection* s, HANDLE f) {
     lstrcpynW(url, p->url, 4096);
     LeaveCriticalSection(&p->lock);
     URL_COMPONENTS u; memset(&u, 0, sizeof(u));
-    wchar_t host[256], rest[4096], hdr[100];
+    wchar_t host[256], rest[4096], hdr[400];
     u.dwStructSize = sizeof(u);
     u.lpszHostName = host; u.dwHostNameLength = 256;
     u.lpszUrlPath = rest; u.dwUrlPathLength = 4096;
@@ -229,7 +244,7 @@ static DWORD dlSectionTry(DlSection* s, HANDLE f) {
     if (!secure && !(p->allowHttp && u.nScheme == INTERNET_SCHEME_HTTP)) return ERROR_INVALID_PARAMETER;
     wchar_t full[4400];
     swprintf(full, 4400, L"%s%s", rest, u.lpszExtraInfo && u.dwExtraInfoLength ? u.lpszExtraInfo : L"");
-    swprintf(hdr, 100, L"Range: bytes=%llu-%llu", s->from + s->done, s->from + s->len - 1);
+    swprintf(hdr, 400, L"Range: bytes=%llu-%llu\r\n%s", s->from + s->done, s->from + s->len - 1, p->headers ? p->headers : L"");
 
     DWORD err = 0;
     HINTERNET w = WinHttpOpen(L"WindowsChosenUtilities", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
@@ -295,12 +310,15 @@ static DWORD WINAPI dlSectionProc(LPVOID arg) {
     return 0;
 }
 
-// Downloads size bytes to path. Returns 0, ERROR_CANCELLED, or an error with *status when it was the server's answer.
-// ERROR_NOT_SUPPORTED: the server doesn't do sections, and nothing is left behind.
-static DWORD dlHttpParallel(const wchar_t* url, const wchar_t* path, unsigned long long size, DWORD* status, BOOL allowHttp,
-                            HttpProgress progress, DlFreshLink fresh, void* ctx) {
+// Downloads size bytes to path in parts (1 to DL_SECTIONS) sections, sending headers with each. Returns 0, ERROR_CANCELLED,
+// or an error with *status when it was the server's answer. ERROR_NOT_SUPPORTED: the server doesn't do sections, and
+// nothing is left behind.
+static DWORD dlHttpParallelEx(const wchar_t* url, const wchar_t* headers, int parts, const wchar_t* path, unsigned long long size,
+                              DWORD* status, BOOL allowHttp, HttpProgress progress, DlFreshLink fresh, void* ctx) {
     *status = 0;
-    if (size < DL_SECTIONS) return ERROR_NOT_SUPPORTED;
+    if (parts < 1) parts = 1;
+    if (parts > DL_SECTIONS) parts = DL_SECTIONS;
+    if (size < (unsigned long long)parts) return ERROR_NOT_SUPPORTED;
     HANDLE f = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, 0, NULL);
     if (f == INVALID_HANDLE_VALUE) return GetLastError();
     // Sparse while it fills: otherwise the first write near the end makes Windows zero everything before it
@@ -315,13 +333,13 @@ static DWORD dlHttpParallel(const wchar_t* url, const wchar_t* path, unsigned lo
     if (!p) err = ERROR_OUTOFMEMORY;
     if (!err) {
         lstrcpynW(p->url, url, 4096);
-        p->path = path; p->allowHttp = allowHttp; p->fresh = fresh; p->ctx = ctx;
+        p->path = path; p->headers = headers; p->allowHttp = allowHttp; p->fresh = fresh; p->ctx = ctx;
         InitializeCriticalSection(&p->lock);
-        unsigned long long each = size / DL_SECTIONS;
-        for (int i = 0; i < DL_SECTIONS; i++) {
+        unsigned long long each = size / parts;
+        for (int i = 0; i < parts; i++) {
             s[i].p = p;
             s[i].from = each * i;
-            s[i].len = (i == DL_SECTIONS - 1) ? size - each * i : each;
+            s[i].len = (i == parts - 1) ? size - each * i : each;
             t[started] = CreateThread(NULL, 0, dlSectionProc, &s[i], 0, NULL);
             if (!t[started]) { err = GetLastError(); InterlockedExchange(&p->stop, 1); break; }
             started++;
@@ -348,6 +366,10 @@ static DWORD dlHttpParallel(const wchar_t* url, const wchar_t* path, unsigned lo
     CloseHandle(f);
     if (err) DeleteFileW(path);
     return err;
+}
+static DWORD dlHttpParallel(const wchar_t* url, const wchar_t* path, unsigned long long size, DWORD* status, BOOL allowHttp,
+                            HttpProgress progress, DlFreshLink fresh, void* ctx) {
+    return dlHttpParallelEx(url, NULL, DL_SECTIONS, path, size, status, allowHttp, progress, fresh, ctx);
 }
 
 // Calls the API and returns its "response" part inside *body, which the caller frees. If the API is busy it waits
@@ -388,7 +410,7 @@ static const char* dlApi(const wchar_t* query, char** body, wchar_t* err, int cc
     return NULL;
 }
 
-// A file's SHA-256 or SHA-1 as lowercase hex. The window and the job can both be hashing, so each call has its own buffer.
+// A file's SHA-256 or SHA-1 (or SHA-512, into 129) as lowercase hex. The window and the job can both be hashing, so each call has its own buffer.
 static BOOL dlHashFile(const wchar_t* path, ALG_ID alg, wchar_t* hex /* 65 */) {
     hex[0] = 0;
     HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
@@ -399,7 +421,7 @@ static BOOL dlHashFile(const wchar_t* path, ALG_ID alg, wchar_t* hex /* 65 */) {
         DWORD got;
         ok = TRUE;
         while (ok && ReadFile(f, buf, 1 << 18, &got, NULL) && got) ok = CryptHashData(h, buf, got, 0);
-        BYTE d[32]; DWORD n = 32;
+        BYTE d[64]; DWORD n = 64;
         if (ok && CryptGetHashParam(h, HP_HASHVAL, d, &n, 0)) {
             for (DWORD i = 0; i < n; i++) swprintf(hex + i * 2, 3, L"%02x", d[i]);
         } else ok = FALSE;
