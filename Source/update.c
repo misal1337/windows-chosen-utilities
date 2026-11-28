@@ -304,8 +304,19 @@ static DWORD WINAPI suJobProc(LPVOID arg) {
     wcsncat(dir, L"WCU-Update", MAX_PATH - wcslen(dir) - 1);
     CreateDirectoryW(dir, NULL);
     swprintf(g_suFile, MAX_PATH, L"%s\\" L"" SU_ASSET, dir);
-    err = dlHttpCore(j->url, NULL, g_suFile, &status, FALSE, suTick, j);
-    if (!err && status != 200) err = ERROR_BAD_NET_RESP;
+    // a busy or briefly dropped connection (a timeout, a reset) gets a few more tries before the update gives up
+    for (int attempt = 1; ; attempt++) {
+        status = 0;
+        err = dlHttpCore(j->url, NULL, g_suFile, &status, FALSE, suTick, j);
+        if (!err && status != 200) err = (status >= 500) ? ERROR_WINHTTP_TIMEOUT : ERROR_BAD_NET_RESP;
+        BOOL passing = err == ERROR_WINHTTP_TIMEOUT || err == ERROR_WINHTTP_CANNOT_CONNECT || err == ERROR_WINHTTP_CONNECTION_ERROR ||
+                       err == ERROR_WINHTTP_NAME_NOT_RESOLVED || err == ERROR_WINHTTP_INVALID_SERVER_RESPONSE || err == ERROR_WINHTTP_SECURE_FAILURE;
+        if (!err || !passing || attempt == 4) break;
+        DeleteFileW(g_suFile);
+        InterlockedExchange(&g_suPct, -1);
+        PostMessageW(g_hwnd, WM_APP_SUPROG, 0, 0);
+        pauseMs(attempt * 3000);                          // 3, 6 and 9 seconds
+    }
     wchar_t hex[65];
     if (!err) {
         WIN32_FILE_ATTRIBUTE_DATA fa;

@@ -120,6 +120,14 @@ typedef struct {
     const wchar_t* const* items; int nItems; int* pick;
     BOOL* checks;                   // one per item, toggled in place; adds Select all and Select none
     BOOL scrollBody;                // a wider dialog whose long body scrolls (wheel, arrows, Page Up/Down)
+    // checklist extras (HWiNFO's settings box)
+    int maxChecks;                  // >0: at most this many ticked; replaces Select all/none with a count
+    BOOL reorder;                   // up and down arrows on each row move it; items, checks and order[] move with it
+    int* order;                     // with reorder: swapped along with the rows, so the caller knows which is which
+    const wchar_t* toggleText; BOOL* toggle;   // a tick box of its own above the list
+    const wchar_t* toggleText2; BOOL* toggle2; // and a second one below it
+    const wchar_t* resetText;       // a small button beside the count: closes the dialog with result 2
+    int* sizes; int sizeMin, sizeMax;   // a number per row with - and + beside it (font size), moved with the row
 } DlgExtra;
 static int showDialog(HWND owner, const wchar_t* title, const wchar_t* body,
                       const DlgRow* rows, int nrows,

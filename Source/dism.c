@@ -329,7 +329,7 @@ static DWORD WINAPI updLookProc(LPVOID arg) {
         }
     }
     if (result == UPD_FOUND) {
-        Sleep(5000);                    // UUP dump refuses requests that come too close together
+        pauseMs(5000);                    // UUP dump refuses requests that come too close together
         swprintf(q, 300, L"get.php?id=%s&lang=en-us&edition=professional", uuid);
         r = dlApi(q, &b, err, 400);
         if (!r) result = UPD_FAILED;

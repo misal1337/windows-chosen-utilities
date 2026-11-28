@@ -122,8 +122,64 @@ static DWORD dlHttpCore(const wchar_t* url, char** body, const wchar_t* path, DW
                         HttpProgress progress, void* ctx) {
     return dlHttpReq(url, NULL, NULL, body, path, status, NULL, allowHttp, progress, ctx);
 }
+static DWORD dlHttpReqWin(const wchar_t* url, const wchar_t* verb, const wchar_t* headers, char** body, const wchar_t* path,
+                          DWORD* status, unsigned long long* length, BOOL allowHttp, HttpProgress progress, void* ctx);
+
+// Windows' own curl.exe (in System32 since Windows 10 1803) fetching an https file, following redirects on https only.
+// The fallback for a network where WinHTTP can't reach a server that curl can (seen on one ISP line with GitHub's
+// download server: WinHTTP timed out every time, curl connected at once). *status gets the final HTTP status.
+static DWORD dlCurlFile(const wchar_t* url, const wchar_t* path, DWORD* status) {
+    wchar_t exe[MAX_PATH], cmd[4400 + MAX_PATH + 300];
+    *status = 0;
+    systemPath(exe, L"curl.exe");
+    if (!isFile(exe)) return ERROR_FILE_NOT_FOUND;
+    if (wcsncmp(url, L"https://", 8) || wcspbrk(url, L"\" \t\r\n") || wcschr(path, L'"')) return ERROR_INVALID_PARAMETER;
+    swprintf(cmd, 4400 + MAX_PATH + 300, L"\"%s\" -sS -L --proto =https --proto-redir =https --connect-timeout 15 --max-time 1800 "
+             L"-A WindowsChosenUtilities -o \"%s\" -w \"\\nWCUHTTP=%%{http_code}\\n\" \"%s\"", exe, path, url);
+    HANDLE rd = NULL; PROCESS_INFORMATION pi;
+    DWORD err = spawnPiped(exe, cmd, &rd, &pi);
+    if (err) return err;
+    char out[4096]; DWORD len = 0, got;
+    while (ReadFile(rd, out + len, (DWORD)(sizeof(out) - 1 - len), &got, NULL) && got) {
+        len += got;
+        if (len >= sizeof(out) - 1) {          // keep the end, where the status line is
+            memmove(out, out + len - 1024, 1024); len = 1024;
+        }
+    }
+    out[len] = 0;
+    CloseHandle(rd);
+    CloseHandle(pi.hThread);
+    DWORD code = waitExitCode(pi.hProcess);
+    const char* s = NULL;
+    for (const char* p = strstr(out, "WCUHTTP="); p; p = strstr(p + 1, "WCUHTTP=")) s = p;
+    if (s) *status = (DWORD)strtoul(s + 8, NULL, 10);
+    if (code) { DeleteFileW(path); return code == 28 ? ERROR_WINHTTP_TIMEOUT : ERROR_WINHTTP_CANNOT_CONNECT; }
+    return 0;
+}
+
 static DWORD dlHttpReq(const wchar_t* url, const wchar_t* verb, const wchar_t* headers, char** body, const wchar_t* path,
                        DWORD* status, unsigned long long* length, BOOL allowHttp, HttpProgress progress, void* ctx) {
+    // WCU_FORCE_CURL=1 (testing only) skips WinHTTP for file downloads
+    BOOL force = path && !verb && !headers && GetEnvironmentVariableW(L"WCU_FORCE_CURL", NULL, 0) > 0;
+    DWORD err = force ? ERROR_WINHTTP_CANNOT_CONNECT : dlHttpReqWin(url, verb, headers, body, path, status, length, allowHttp, progress, ctx);
+    BOOL noReach = err == ERROR_WINHTTP_TIMEOUT || err == ERROR_WINHTTP_CANNOT_CONNECT || err == ERROR_WINHTTP_CONNECTION_ERROR ||
+                   err == ERROR_WINHTTP_SECURE_FAILURE;
+    if (noReach && path && !verb && !headers && !body && !wcsncmp(url, L"https://", 8)) {
+        DWORD st = 0, e2 = dlCurlFile(url, path, &st);
+        if (!e2) {
+            *status = st;
+            if (progress) {                      // one last tick with the size, so a bar shows it finished
+                WIN32_FILE_ATTRIBUTE_DATA fa;
+                if (GetFileAttributesExW(path, GetFileExInfoStandard, &fa)) progress(((unsigned long long)fa.nFileSizeHigh << 32) | fa.nFileSizeLow, ctx);
+            }
+            return 0;
+        }
+    }
+    return err;
+}
+
+static DWORD dlHttpReqWin(const wchar_t* url, const wchar_t* verb, const wchar_t* headers, char** body, const wchar_t* path,
+                          DWORD* status, unsigned long long* length, BOOL allowHttp, HttpProgress progress, void* ctx) {
     BOOL head = verb && !wcscmp(verb, L"HEAD");
     if (length) *length = 0;
     URL_COMPONENTS u; memset(&u, 0, sizeof(u));
@@ -388,7 +444,7 @@ static const char* dlApi(const wchar_t* query, char** body, wchar_t* err, int cc
         }
         if (status == 429) {            // told to slow down
             free(b);
-            Sleep(20000);
+            pauseMs(20000);
             continue;
         }
         const char* resp = jGet(b, "response");

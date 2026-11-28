@@ -1700,7 +1700,7 @@ static DWORD uupRunJob(const wchar_t* specText, HANDLE out) {
         }
         free(b);
         if (DL_STOPPED()) goto stopped;
-        Sleep(DL_LINKS_GAP_MS);
+        pauseMs(DL_LINKS_GAP_MS);
     }
     if (!nFiles) { repWrite(out, L"Error: UUP dump listed no files for this choice.\r\n"); goto done; }
 
@@ -1884,7 +1884,7 @@ static DWORD WINAPI dlExampleProc(LPVOID arg) {
         if (wcscmp(vers[j].name, vers[i].name) > 0) { tmp = vers[i]; vers[i] = vers[j]; vers[j] = tmp; }
     for (int i = 0; i < n && i < 3 && !out->build.build[0]; i++) {
         wchar_t q[200];
-        Sleep(5000);                                    // UUP dump refuses requests that come too close together
+        pauseMs(5000);                                    // UUP dump refuses requests that come too close together
         swprintf(q, 200, L"fetchupd.php?arch=amd64&ring=ReleasePreview&flight=Active&build=%lu.1&sku=48&type=Production", vers[i].major);
         r = dlApi(q, &b, err, 320);
         if (r && jOpen(jGet(r, "updateArray"), &it)) {
@@ -2436,7 +2436,15 @@ static void drawDownload(int cL, int cR) {
     RECT fr = { x1, y, archR - fw * 2 - dp(6) - dp(8), y + dp(32) };
     dlWantExample();
     wchar_t hint[80] = L"Build number";                  // the example appears when the lookup is done
-    if (g_dlExampleState == 2) swprintf(hint, 80, L"Build number, for example %s%s", dlExample(), g_dlExample[0] ? L" (latest Release Preview)" : L"");
+    if (g_dlExampleState == 2) {
+        // the longest wording that fits the box in the language shown, so "(latest Release Preview)" isn't cut off
+        static const wchar_t* FORMS[] = { L"Build number, for example %s%s", L"Build No., e.g. %s%s", L"e.g. %s%s", L"e.g. %s" };
+        int room = (fr.right - fr.left) - dp(20);
+        for (int i = 0; i < 4; i++) {
+            swprintf(hint, 80, FORMS[i], dlExample(), g_dlExample[0] ? L" (latest Release Preview)" : L"");
+            if (textWidth(g_fSmall, hint) <= room) break;
+        }
+    }
     aioField(A_D_BOX, fr, g_dlBox, 32, !en, hint);
     aioButton(A_D_FIND, x2 - findW, y, x2, y + dp(32), L"Find", FALSE, en && !g_dlQuery, FALSE);
     RECT m = { x1, y + dp(36), x2, y + dp(58) };

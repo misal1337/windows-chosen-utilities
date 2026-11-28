@@ -25,6 +25,7 @@ typedef struct {
     int dragY, dragTop;               // where the drag started, and the first row shown then
     BOOL dragMoved;                   // a press on a row that moved scrolls instead of ticking
     int bodyTop, bodyShown, bodyFull; // scrollBody: how far the body is scrolled, and its visible and whole heights
+    RECT toggleRc, toggleRc2, resetRc; // the checklist's own tick boxes and its reset button
 } DlgState;
 
 #define DLG_WIDE 560                  // the width of a dialog with a scrolling body
@@ -59,12 +60,91 @@ static int measureWrapped(WFont font, const wchar_t* s, int width) {
     return (int)ceil(m.height);
 }
 
+static int dlgToggleRows(const DlgExtra* x);
 // Room the text input or list takes, for a list showing all its items.
 static int dlgExtraHeight(const DlgExtra* x) {
     if (!x) return 0;
     if (x->input) return dp(14) + dp(DLG_FIELD) + dp(DLG_ERROR);
-    if (x->checks) return dp(14) + dp(DLG_ROW) + dp(DLG_ROW) * min(x->nItems, DLG_CHECK_ROWS) + dp(8);
+    if (x->checks) return dp(14) + dlgToggleRows(x) + dp(DLG_ROW) + dp(DLG_ROW) * min(x->nItems, DLG_CHECK_ROWS) + dp(8);
     return x->nItems ? dp(14) + dp(DLG_ROW) * x->nItems + dp(8) : 0;
+}
+
+static int dlgCheckedCount(const DlgExtra* x) {
+    int on = 0;
+    for (int i = 0; i < x->nItems; i++) if (x->checks[i]) on++;
+    return on;
+}
+// Ticks or unticks a row; with a limit, one more than it allows is refused and the count line says why
+static void dlgToggleItem(HWND h, DlgState* d, int i) {
+    if (i < 0 || i >= d->x->nItems) return;
+    if (!d->x->checks[i] && d->x->maxChecks > 0 && dlgCheckedCount(d->x) >= d->x->maxChecks) {
+        swprintf(d->error, 200, L"Only %d can be ticked. Untick one first.", d->x->maxChecks);
+    } else { d->x->checks[i] = !d->x->checks[i]; d->error[0] = 0; }
+    InvalidateRect(h, NULL, FALSE);
+}
+// The checklist's own tick box, above the count row
+static int dlgToggleRows(const DlgExtra* x) {
+    int n = (x->toggle ? 1 : 0) + (x->toggle2 ? 1 : 0);
+    return n ? n * (dp(DLG_ROW) + dp(2)) + dp(4) : 0;
+}
+static void dlgPaintToggle(DlgState* d, RECT* rc, const wchar_t* text, BOOL on, int left, int right, int y) {
+    (void)d;
+    *rc = (RECT){ left, y, right, y + dp(DLG_ROW) };
+    drawCheckbox(left + dp(10), y + dp(DLG_ROW) / 2, dp(16), on ? 1.0 : 0.0, TRUE);
+    RECT t = { left + dp(28), y, right, y + dp(DLG_ROW) };
+    drawText(g_fBody, text, t, textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+}
+// With a limit: how many are ticked (or why a tick was refused), and the reset button at the right
+static void dlgPaintCountRow(DlgState* d, int left, int right, int y) {
+    SetRectEmpty(&d->resetRc);
+    int rr = right;
+    if (d->x->resetText) {
+        int w = textWidth(g_fSmall, d->x->resetText) + dp(20);
+        d->resetRc = (RECT){ right - w, y, right, y + dp(DLG_ROW) - dp(4) };
+        RECT b = d->resetRc;
+        Col f = buttonFillCol(), sep = sepCol();
+        fillRoundRect(b.left, b.top, b.right, b.bottom, dp(4), f.r, f.g, f.b, f.a);
+        strokeRoundRect(b.left, b.top, b.right, b.bottom, dp(4), dp(1), sep.r, sep.g, sep.b, sep.a * (g_dark ? 1.0 : 1.6));
+        drawText(g_fSmall, d->x->resetText, b, textRGB(), DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        rr = b.left - dp(8);
+    }
+    wchar_t count[80];
+    if (!d->error[0]) swprintf(count, 80, L"%d of %d ticked", dlgCheckedCount(d->x), d->x->maxChecks);
+    RECT c = { left, y, rr, y + dp(DLG_ROW) - dp(4) };
+    drawText(g_fSmall, d->error[0] ? d->error : count, c, d->error[0] ? (g_dark ? RGB(255, 153, 164) : RGB(196, 43, 28)) : mutedRGB(),
+             DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+}
+// Which arrow of a reorderable row is at (x, y): -1 up, 1 down, 0 none; *item gets the row
+static int dlgItemAt(DlgState* d, int x, int y);
+static int dlgArrowAt(DlgState* d, int x, int y, int* item) {
+    if (!d->x || !d->x->reorder) return 0;
+    int i = dlgItemAt(d, x, y);
+    if (i < 0 || x < d->list.right - dp(68) || x > d->list.right - dp(6)) return 0;
+    *item = i;
+    return x < d->list.right - dp(37) ? -1 : 1;
+}
+// The size control left of the arrows: -1 on "-", 1 on "+", 0 elsewhere; *item gets the row
+#define DLG_SIZE_R (d->x->reorder ? 76 : 8)        // its right edge, in from the list's right
+static int dlgSizeAt(DlgState* d, int x, int y, int* item) {
+    if (!d->x || !d->x->sizes) return 0;
+    int i = dlgItemAt(d, x, y);
+    int r = d->list.right - dp(DLG_SIZE_R);
+    if (i < 0 || x < r - dp(96) || x > r) return 0;
+    *item = i;
+    if (x < r - dp(64)) return -1;
+    if (x > r - dp(32)) return 1;
+    return 0;
+}
+static void dlgMoveRow(HWND h, DlgState* d, int i, int dir) {
+    int j = i + dir;
+    if (j < 0 || j >= d->x->nItems) return;
+    const wchar_t** it = (const wchar_t**)d->x->items;
+    const wchar_t* ts = it[i]; it[i] = it[j]; it[j] = ts;
+    BOOL tc = d->x->checks[i]; d->x->checks[i] = d->x->checks[j]; d->x->checks[j] = tc;
+    if (d->x->order) { int to = d->x->order[i]; d->x->order[i] = d->x->order[j]; d->x->order[j] = to; }
+    if (d->x->sizes) { int ts2 = d->x->sizes[i]; d->x->sizes[i] = d->x->sizes[j]; d->x->sizes[j] = ts2; }
+    *d->x->pick = j;
+    InvalidateRect(h, NULL, FALSE);
 }
 
 // Select all and Select none, above a checklist
@@ -139,8 +219,28 @@ static void dlgPaintList(DlgState* d, int left, int right, int y, int bottom) {
             drawCheckbox(rc.left + dp(24), ry + rowH / 2, dp(16), d->x->checks[idx] ? 1.0 : 0.0, TRUE);
             tl = rc.left + dp(42);
         }
-        RECT t = { tl, ry, rc.right - dp(12), ry + rowH };
-        drawText(g_fSmall, d->x->items[idx], t, textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+        RECT t = { tl, ry, rc.right - dp(d->x->reorder ? 76 : 12) - (d->x->sizes ? dp(104) : 0), ry + rowH };
+        if (d->x->sizes) {               // "-  20  +", right-aligned before the arrows
+            int r = rc.right - dp(DLG_SIZE_R), cy = ry + rowH / 2, v = d->x->sizes[idx];
+            Col f = buttonFillCol(), sep = sepCol();
+            for (int b = 0; b < 2; b++) {
+                int bl = b ? r - dp(30) : r - dp(96), br = bl + dp(28);
+                fillRoundRect(bl, cy - dp(11), br, cy + dp(11), dp(4), f.r, f.g, f.b, f.a);
+                strokeRoundRect(bl, cy - dp(11), br, cy + dp(11), dp(4), dp(1), sep.r, sep.g, sep.b, sep.a * (g_dark ? 1.0 : 1.6));
+                BOOL can = b ? v < d->x->sizeMax : v > d->x->sizeMin;
+                drawGlyph(g_fIcon, b ? 0xE710 : 0xE738, (bl + br) / 2, cy, can ? textRGB() : mutedRGB());   // + and -
+            }
+            wchar_t num[8]; swprintf(num, 8, L"%d", v);
+            RECT nr = { r - dp(66), ry, r - dp(32), ry + rowH };
+            drawText(g_fSmall, num, nr, textRGB(), DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        }
+        BOOL dim = d->x->maxChecks > 0 && !d->x->checks[idx] && dlgCheckedCount(d->x) >= d->x->maxChecks;
+        drawText(g_fSmall, d->x->items[idx], t, dim ? mutedRGB() : textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+        if (d->x->reorder) {             // up and down arrows; the first row can't go up, the last can't go down
+            int cy = ry + rowH / 2;
+            drawGlyph(g_fIcon, 0xE70E, rc.right - dp(52), cy, idx > 0 ? textRGB() : mutedRGB());
+            drawGlyph(g_fIcon, 0xE70D, rc.right - dp(22), cy, idx < n - 1 ? textRGB() : mutedRGB());
+        }
     }
     SetRectEmpty(&d->bar);
     if (d->itemsShown < n) {               // where the visible part is in the whole list; it can be dragged
@@ -188,7 +288,7 @@ static void dlgPaint(HWND h, DlgState* d, HDC hdc) {
     int rowsH = d->nrows ? dp(DLG_ROW) * d->nrows + dp(8) : 0;
     int maxBody = footTop - y - (rowsH ? rowsH + dp(16) : 0) - dp(16);
     if (d->x && d->x->input) maxBody -= dlgExtraHeight(d->x);
-    else if (d->x && d->x->nItems) maxBody -= dp(14) + dp(DLG_ROW) * (d->x->checks ? 2 : 1) + dp(8);
+    else if (d->x && d->x->nItems) maxBody -= dp(14) + dp(DLG_ROW) * (d->x->checks ? 2 : 1) + dp(8) + dlgToggleRows(d->x);
     if (bodyH > maxBody) bodyH = maxBody;
     d->bodyShown = bodyH; d->bodyFull = bodyFull;
     if (dlgScrolls(d->x) && bodyFull > bodyH && bodyH > 0) {
@@ -225,8 +325,13 @@ static void dlgPaint(HWND h, DlgState* d, HDC hdc) {
 
     if (d->x && d->x->input) dlgPaintInput(d, pad, W - pad, y + dp(14));
     else if (d->x && d->x->checks) {
-        dlgPaintSelectRow(d, pad, y + dp(14));
-        dlgPaintList(d, pad, W - pad, y + dp(14) + dp(DLG_ROW), footTop - dp(8));
+        int cy = y + dp(14);
+        if (d->x->toggle) { dlgPaintToggle(d, &d->toggleRc, d->x->toggleText, *d->x->toggle, pad, W - pad, cy); cy += dp(DLG_ROW) + dp(2); }
+        if (d->x->toggle2) { dlgPaintToggle(d, &d->toggleRc2, d->x->toggleText2, *d->x->toggle2, pad, W - pad, cy); cy += dp(DLG_ROW) + dp(2); }
+        if (d->x->toggle || d->x->toggle2) cy += dp(4);
+        if (d->x->maxChecks > 0) dlgPaintCountRow(d, pad, W - pad, cy);
+        else dlgPaintSelectRow(d, pad, cy);
+        dlgPaintList(d, pad, W - pad, cy + dp(DLG_ROW), footTop - dp(8));
     }
     else if (d->x && d->x->nItems) dlgPaintList(d, pad, W - pad, y + dp(14), footTop - dp(8));
 
@@ -371,7 +476,8 @@ static LRESULT CALLBACK DlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_NCHITTEST: {              // drag the dialog anywhere except on its buttons
         POINT p = { GET_X_LPARAM(l), GET_Y_LPARAM(l) };
         ScreenToClient(h, &p);
-        if (d && (PtInRect(&d->field, p) || PtInRect(&d->list, p) || PtInRect(&d->selAll, p) || PtInRect(&d->selNone, p))) return HTCLIENT;
+        if (d && (PtInRect(&d->field, p) || PtInRect(&d->list, p) || PtInRect(&d->selAll, p) || PtInRect(&d->selNone, p) ||
+                  PtInRect(&d->toggleRc, p) || PtInRect(&d->toggleRc2, p) || PtInRect(&d->resetRc, p))) return HTCLIENT;
         return (d && dlgHitButton(d, p.x, p.y) != -1) ? HTCLIENT : HTCAPTION;
     }
     case WM_SETCURSOR:
@@ -440,6 +546,31 @@ static LRESULT CALLBACK DlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             InvalidateRect(h, NULL, FALSE);
             return 0;
         }
+        if (d->x && d->x->toggle && PtInRect(&d->toggleRc, p)) {
+            *d->x->toggle = !*d->x->toggle;
+            InvalidateRect(h, NULL, FALSE);
+            return 0;
+        }
+        if (d->x && d->x->toggle2 && PtInRect(&d->toggleRc2, p)) {
+            *d->x->toggle2 = !*d->x->toggle2;
+            InvalidateRect(h, NULL, FALSE);
+            return 0;
+        }
+        if (d->x && d->x->resetText && PtInRect(&d->resetRc, p)) { d->result = 2; d->done = TRUE; return 0; }
+        {
+            int row = -1, dir = dlgArrowAt(d, p.x, p.y, &row);
+            if (dir) { dlgMoveRow(h, d, row, dir); return 0; }
+            int sz = dlgSizeAt(d, p.x, p.y, &row);
+            if (sz) {
+                int v = d->x->sizes[row] + sz;
+                if (v >= d->x->sizeMin && v <= d->x->sizeMax) d->x->sizes[row] = v;
+                *d->x->pick = row;
+                InvalidateRect(h, NULL, FALSE);
+                return 0;
+            }
+            if (d->x && d->x->sizes && dlgItemAt(d, p.x, p.y) >= 0 &&
+                p.x >= d->list.right - dp(DLG_SIZE_R) - dp(96) && p.x <= d->list.right - dp(DLG_SIZE_R)) return 0;   // the number itself
+        }
         if (d->x && d->x->checks && (PtInRect(&d->selAll, p) || PtInRect(&d->selNone, p))) {
             BOOL on = PtInRect(&d->selAll, p);
             for (int i = 0; i < d->x->nItems; i++) d->x->checks[i] = on;
@@ -469,7 +600,7 @@ static LRESULT CALLBACK DlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         if (d->drag) {
             if (d->drag == 2 && !d->dragMoved && d->x->checks) {
                 int item = dlgItemAt(d, GET_X_LPARAM(l), GET_Y_LPARAM(l));
-                if (item >= 0) { d->x->checks[item] = !d->x->checks[item]; dlgMovePick(h, d, item); }
+                if (item >= 0) { dlgToggleItem(h, d, item); dlgMovePick(h, d, item); }
             }
             d->drag = 0;
             ReleaseCapture();
@@ -501,8 +632,7 @@ static LRESULT CALLBACK DlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             return 0;
         }
         if (d->x && d->x->checks && w == VK_SPACE) {          // Space ticks the row, Enter still confirms
-            d->x->checks[*d->x->pick] = !d->x->checks[*d->x->pick];
-            InvalidateRect(h, NULL, FALSE);
+            dlgToggleItem(h, d, *d->x->pick);
             return 0;
         }
         if (w == VK_RETURN || (w == VK_SPACE && !(d->x && d->x->input))) dlgFinish(h, d, d->focus == 0);
@@ -544,7 +674,7 @@ static int showDialogEx(HWND owner, const wchar_t* title, const wchar_t* body,
     if (extra && extra->nItems) d.itemTop = *extra->pick;              // the painter pulls this back into range
 
     // size to the content, clamped to the screen (the footer stays reachable, long bodies clip)
-    int W = dp(dlgScrolls(extra) ? DLG_WIDE : DLG_WIDTH), pad = dp(DLG_PAD);
+    int W = dp(dlgScrolls(extra) || (extra && extra->sizes) ? DLG_WIDE : DLG_WIDTH), pad = dp(DLG_PAD);
     int H = pad + dp(28) + dp(12) + measureWrapped(g_fBody, body, W - pad * 2 - (dlgScrolls(extra) ? dp(DLG_BAR) : 0))
           + (nrows ? dp(16) + dp(DLG_ROW) * nrows + dp(8) : 0) + dlgExtraHeight(extra) + dp(24) + dp(DLG_FOOTER);
     // A minimized window is at -32000,-32000: the dialog would open off the screen with the window disabled behind

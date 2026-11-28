@@ -8,7 +8,7 @@
 
 #define RES_POT_REG 30                    // app.rc embeds apps/PotPlayerMini64.reg under this id
 
-enum { APP_FIREFOX, APP_IDM, APP_POT, APP_CRD, APP_NANAZIP, APP_TAILSCALE, APP_ABDM, APP_CRAFT, APP_COUNT };
+enum { APP_FIREFOX, APP_IDM, APP_POT, APP_CRD, APP_NANAZIP, APP_TAILSCALE, APP_ABDM, APP_CRAFT, APP_HWINFO, APP_COUNT };
 #define ABDM_REPO L"amir1376/ab-download-manager"
 #define APPS_PAGES 2                      // the page's sections (Page 1, Page 2); AppDef.page says where each app is
 enum { KIND_EXE, KIND_MSI, KIND_MSIX };
@@ -61,9 +61,15 @@ static const AppDef APPS[APP_COUNT] = {
     { L"Craft Launcher", L"ArtCraft Launcher", L"ArtCraft Launcher", L"artcraft-launcher.exe", TRUE, L"Learning Machines Inc",
       L"/qn /norestart INSTALLDESKTOPSHORTCUT=0", NULL, L"ArtCraft Launcher", KIND_MSI, L"%LOCALAPPDATA%\\Programs\\ArtCraft\\Launcher",
       NULL, L"ArtCraftLauncher_setup.msi", NULL, TRUE, 1, L"storytold/craft-launcher", L"artcraft-launcher-%s-windows-%s.msi" },
+    // HWiNFO64: an Inno Setup installer for all users, signed by REALiX. hwinfo.com sits behind a browser check, so the
+    // newest version comes from its own update file (hwinfo.com/ver.txt) and the setup from sac.sk, the mirror its
+    // download page lists first. Its settings stay in HKCU\Software\HWiNFO64 through an update.
+    { L"HWiNFO", L"HWiNFO", L"HWiNFO", L"HWiNFO64.exe", TRUE, L"REALiX, s.r.o.", L"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-", NULL,
+      L"HWiNFO", KIND_EXE, NULL, NULL, L"HWiNFO_setup.exe", NULL, FALSE, 1 },
 };
 // How each uninstaller runs silently (an .msi: msiexec /x, a packaged app: Remove-AppxPackage)
-static const wchar_t* APPS_UNINST[APP_COUNT] = { L"/S", L"-skdlgs", L"/S", NULL, NULL, NULL, L"/S", NULL };
+static const wchar_t* APPS_UNINST[APP_COUNT] = { L"/S", L"-skdlgs", L"/S", NULL, NULL, NULL, L"/S", NULL,
+                                                 L"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" };
 #define IDM_PAGE L"https://www.internetdownloadmanager.com/download.html"
 static const wchar_t* POT_EXTS[] = { L".mp4", L".mkv", L".mpg", L".mpeg", L".wmv" };
 static const wchar_t* NANAZIP_EXTS[] = { L".zip", L".rar", L".7z" };
@@ -439,6 +445,27 @@ static BOOL appsGhRelease(const AppDef* ad, wchar_t* ver, int cch, wchar_t* url,
     return TRUE;
 }
 
+// HWiNFO's newest release and its setup on sac.sk (hwi_860x.exe is 8.60), the mirror HWiNFO's download page lists
+// first: the highest hwi_NNNx.exe in its HWiNFO listing. Only releases go there, never betas (hwinfo.com/ver.txt also
+// names betas, so it isn't used: the user wants no beta offered). The setup's signature is checked before it runs.
+#define HWINFO_LIST L"https://www.sac.sk/files.php?d=13&l=H"
+#define HWINFO_DL   L"https://www.sac.sk/download/utildiag/"
+static BOOL appsHwinfoNewest(wchar_t* ver, int cch, wchar_t* url, int urlCch) {
+    char* body = NULL; DWORD status = 0;
+    ver[0] = 0; url[0] = 0;
+    long best = -1;
+    if (!dlHttp(HWINFO_LIST, &body, NULL, &status) && status == 200 && body)
+        for (const char* p = strstr(body, "/utildiag/hwi_"); p; p = strstr(p + 1, "/utildiag/hwi_")) {
+            char* e; long v = strtol(p + 14, &e, 10);
+            if (e - (p + 14) >= 3 && e - (p + 14) <= 4 && !strncmp(e, "x.exe", 5) && v > best) best = v;
+        }
+    free(body);
+    if (best < 0) { url[0] = 0; return FALSE; }
+    swprintf(url, urlCch, HWINFO_DL L"hwi_%ldx.exe", best);
+    swprintf(ver, cch, L"%ld.%02ld", best / 100, best % 100);
+    return TRUE;
+}
+
 static BOOL appsLatestVersion(int app, wchar_t* out, int cch) {
     out[0] = 0;
     char* body = NULL; DWORD status = 0; BOOL ok = FALSE;
@@ -483,6 +510,11 @@ static BOOL appsLatestVersion(int app, wchar_t* out, int cch) {
         ok = appsGhRelease(&APPS[app], out, cch, url, 600, sha);
         break;
     }
+    case APP_HWINFO: {
+        wchar_t url[600];
+        ok = appsHwinfoNewest(out, cch, url, 600);
+        break;
+    }
     }
     free(body);
     if (!ok) out[0] = 0;
@@ -502,6 +534,10 @@ static BOOL appsResolveUrl(int app, wchar_t* url, int cch, DWORD* err) {
     }
     if (a->ghRepo) {                    // the release's setup, with the SHA-256 GitHub lists (AB DM's setup isn't signed)
         if (!appsGhRelease(a, g_appsOffered, 64, url, cch, g_appsSha)) { *err = ERROR_NOT_FOUND; return FALSE; }
+        return TRUE;
+    }
+    if (app == APP_HWINFO) {            // an Update that finds only the version installed stops before running it
+        if (!appsHwinfoNewest(g_appsOffered, 64, url, cch)) { *err = ERROR_NOT_FOUND; return FALSE; }
         return TRUE;
     }
     wchar_t v[64];
@@ -1078,6 +1114,8 @@ static DWORD appsFirefoxDelta(const wchar_t* dir) {
 }
 
 static void appsIdmDriver(const AppDef* a);
+static BOOL hwIniPath(wchar_t* ini);
+static void hwIniBase(const wchar_t* ini);
 static DWORD appsInstall(int app, BOOL update) {
     const AppDef* a = &APPS[app];
     // a folder only administrators and SYSTEM can write, so a normal-rights program can't swap the installer
@@ -1203,6 +1241,10 @@ run:
             if (a->perUser) appsTidyShortcuts(a, FALSE);
             if (!a->perUser || g_elevated) { appsTidyShortcuts(a, TRUE); appsPlaceShortcut(a); }
             if (app == APP_IDM) appsIdmDriver(a);
+            if (app == APP_HWINFO) {        // no beta versions offered, and shared memory on for the gear (HWiNFO64.INI)
+                wchar_t ini[MAX_PATH];
+                if (hwIniPath(ini)) { hwIniBase(ini); appsSay(L"HWiNFO64.INI: beta versions not offered, shared memory on."); }
+            }
         }
     }
     DeleteFileW(path);
@@ -1706,7 +1748,7 @@ static void appsStart(int app, int mode) {
     if (a->closeFirst && appsPids(a->exe, pids, 4)) {
         wchar_t title[80], body[300];
         swprintf(title, 80, L"Close %s first", a->name);
-        swprintf(body, 300, app == APP_IDM || app == APP_ABDM
+        swprintf(body, 300, app == APP_IDM || app == APP_ABDM || app == APP_HWINFO
             ? L"%s is running. It may only show in the notification area: right-click its icon and choose Exit. Then press %s again."
             : L"%s is open. Close it, then press %s again.", a->name,
             un ? L"\x00D7" : update ? L"Update" : reinstall ? L"Reinstall IDM" : a->label);
@@ -1809,7 +1851,9 @@ static void appsOnProgress(int step, int mb) {
 }
 
 static void appsIdmOfferReg(void);
+static BOOL hwOsdOnDone(void);
 static void appsOnDone(DWORD fin) {
+    if (hwOsdOnDone()) return;       // the HWiNFO gear's job (hwinfo.c)
     int app = g_appsRun;
     DWORD code = g_appsCode;
     g_appsRun = -1;
@@ -1872,6 +1916,9 @@ static void appsOnDone(DWORD fin) {
         swprintf(g_appsMsg, 400, L"The %s installer finished, but %s doesn't show as installed.", a->name, a->name);
     else if (step == APS_FOLDER)
         swprintf(g_appsMsg, 400, L"Couldn't make a folder for the download (error %lu). Nothing was installed.", detail);
+    else if (step == APS_SAME && app == APP_HWINFO)
+        swprintf(g_appsMsg, 400, L"%s's newer version isn't on the download mirror yet, which still has %s. Nothing was changed; try Update again later.",
+                 a->name, g_appsVer[app]);
     else if (step == APS_SAME)
         swprintf(g_appsMsg, 400, L"%s's newer version is still being rolled out, and right now only %s is offered. Nothing was changed; try Update again later.",
                  a->name, g_appsVer[app]);
@@ -1959,6 +2006,8 @@ static void appsIdmOfferReg(void) {
     InvalidateRect(g_hwnd, NULL, FALSE);
 }
 
+#include "hwinfo.c"
+
 #include "gpu.c"
 
 // ---------- the page ----------
@@ -2017,6 +2066,14 @@ static void appsDrawRemove(int id, int l, int t, int r, int b, BOOL en) {
     fillRoundRect(l, t, r, b, dp(4), R, G, B, (en ? 0.10 : 0.04) + 0.16 * hv);
     drawGlyph(g_fIcon, 0xE711, (l + r) / 2, (t + b) / 2, en ? RGB(R, G, B) : mutedRGB());
 }
+// The same small square in the accent colour with a gear: imports the app's built-in settings (HWiNFO)
+static void appsDrawGear(int id, int l, int t, int r, int b, BOOL en) {
+    RECT rc = { l, t, r, b };
+    if (en) aioRegister(id, rc, NULL, 0, FALSE);
+    double hv = anim(ANIM_AIO + id, g_hotBtn == BTN_WIDGET + id && en);
+    fillAccent(l, t, r, b, dp(4), (en ? 0.14 : 0.05) + 0.18 * hv);
+    drawGlyph(g_fIcon, 0xE713, (l + r) / 2, (t + b) / 2, en ? g_accent : mutedRGB());
+}
 
 static void drawApps(int cL, int cR) {
     int pad = dp(16), top = pad;
@@ -2033,7 +2090,7 @@ static void drawApps(int cL, int cR) {
     int y = top + dp(92);
     BOOL en = g_busy == 0, shield = !g_elevated;
     g_aioSmall = TRUE;                   // every button here in the smaller font, so the rows look even
-    static const int IDS[APP_COUNT] = { A_P_FIREFOX, A_P_IDM, A_P_POT, A_P_CRD, A_P_NANAZIP, A_P_TAILSCALE, A_P_ABDM, A_P_CRAFT };
+    static const int IDS[APP_COUNT] = { A_P_FIREFOX, A_P_IDM, A_P_POT, A_P_CRD, A_P_NANAZIP, A_P_TAILSCALE, A_P_ABDM, A_P_CRAFT, A_P_HWINFO };
     for (int i = 0; i < APP_COUNT; i++) {
         if (APPS[i].page != g_appsPage) continue;
         // IDM installed: its button reinstalls with the full setup (Update uses IDM's own smaller update)
@@ -2055,6 +2112,10 @@ static void drawApps(int cL, int cR) {
             int uy = y + (bh - ubh) / 2;
             appsDrawRemove(A_P_DEL0 + i, right - ubh, uy, right, uy + ubh, en);
             right -= ubh + dp(8);
+            if (i == APP_HWINFO) {           // and the gear that imports the settings built into this app
+                appsDrawGear(A_P_HWSET, right - ubh, uy, right, uy + ubh, en);
+                right -= ubh + dp(8);
+            }
             textR = right - dp(2);
         }
         if (upd) {
@@ -2074,8 +2135,9 @@ static void drawApps(int cL, int cR) {
              ? L"Installed silently from the publisher, signature checked, with one shortcut in Start Menu and none on the desktop. "
                L"Pot Player gets this app's settings and opens MP4, MKV, MPG, MPEG and WMV. NanaZip comes from the "
                L"Microsoft Store, which updates it, and opens ZIP, RAR and 7Z."
-             : L"Installed silently from the publisher's GitHub releases, checked against the SHA-256 GitHub lists, with one shortcut "
-               L"in Start Menu and none on the desktop. These two install for your account only. The red \x00D7 on a row uninstalls that app.",
+             : L"AB DM and Craft Launcher come from the publisher's GitHub releases, checked against GitHub's SHA-256, for your account only; "
+               L"HWiNFO from its download mirror, signature checked. One shortcut in Start Menu, none on the desktop. "
+               L"The red \x00D7 uninstalls; HWiNFO's gear sets its on-screen display and how it starts.",
              n1, mutedRGB(), DT_LEFT | DT_WORDBREAK);
 
     wchar_t now[200] = L"";

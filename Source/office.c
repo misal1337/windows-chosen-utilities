@@ -651,7 +651,7 @@ static DWORD WINAPI offWatchProc(LPVOID arg) {
     (void)arg;
     wchar_t* found = NULL;
     for (int i = 0; i < 720 && !found; i++) {
-        Sleep(5000);
+        pauseMs(5000);
         wchar_t ver[40] = L""; DWORD cb = sizeof(ver);
         RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\Configuration", L"VersionToReport",
                      RRF_RT_REG_SZ, NULL, ver, &cb);

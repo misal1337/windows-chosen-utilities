@@ -60,13 +60,15 @@ static void tiRun(void) {
         return;
     }
     const wchar_t* name = PathFindFileNameW(g_tiFile);
-    wchar_t msg[MAX_PATH + 320];
+    wchar_t msg[MAX_PATH + 600];
     if (isReg)
-        swprintf(msg, MAX_PATH + 320, L"%s\n\nThis imports the registry file with TrustedInstaller rights, so it can "
-                 L"change keys that even administrators can't. Only run files you trust.", name);
+        swprintf(msg, MAX_PATH + 600, L"%s\n\nThis imports the registry file with TrustedInstaller rights, so it can change keys "
+                 L"Windows protects even from administrators. A wrong value there can stop Windows from starting, and it "
+                 L"can't be undone from here. Please only import files you trust and understand.", name);
     else
-        swprintf(msg, MAX_PATH + 320, L"%s\n\nThis runs the program with TrustedInstaller rights, the highest level on "
-                 L"Windows. The app waits until the program closes. Only run programs you trust.", name);
+        swprintf(msg, MAX_PATH + 600, L"%s\n\nThis runs the program with TrustedInstaller rights, the highest level on Windows, "
+                 L"with nothing to stop it changing protected system files. Please only run programs you trust. "
+                 L"The app waits until the program closes.", name);
     if (askInApp() && !showDialog(g_hwnd, L"Run as TrustedInstaller?", msg, NULL, 0, L"Run", L"Cancel", 1)) return;
 
     wchar_t args[MAX_PATH + 32]; BOOL cancelled = FALSE;
@@ -112,7 +114,7 @@ static void tiClick(int id) {
 static void drawRunTI(int cL, int cR) {
     int pad = dp(16), top = pad;
     Col sf = surfaceCol();
-    fillRoundRect(cL, top, cR, top + dp(300), dp(8), sf.r, sf.g, sf.b, sf.a);
+    fillRoundRect(cL, top, cR, top + dp(428), dp(8), sf.r, sf.g, sf.b, sf.a);
 
     drawPageHeader(0xE72E, cL, cR, top, L"Run as TrustedInstaller",
                    L"Run a program or import a registry file with TrustedInstaller rights.");
@@ -124,6 +126,23 @@ static void drawRunTI(int cL, int cR) {
         L"registry keys that even administrators can't. Asks for administrator permission.",
         note, mutedRGB(), DT_LEFT | DT_WORDBREAK);
     y += dp(48);
+
+    // a caution bar in Windows 11's own warning colours: what TrustedInstaller rights can do, said politely
+    int wh = dp(116);
+    if (g_dark) fillRoundRect(x1, y, x2, y + wh, dp(6), 67, 53, 25, 1.0);
+    else        fillRoundRect(x1, y, x2, y + wh, dp(6), 255, 244, 206, 1.0);
+    COLORREF amber = g_dark ? RGB(252, 225, 0) : RGB(157, 93, 0);
+    drawGlyph(g_fIcon, 0xE7BA, x1 + dp(22), y + dp(22), amber);          // the warning triangle
+    RECT wt = { x1 + dp(44), y + dp(10), x2 - dp(14), y + dp(32) };
+    drawText(g_fBodyBold, L"Please use this with care", wt, textRGB(), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    RECT wb = { x1 + dp(44), y + dp(34), x2 - dp(14), y + wh - dp(8) };
+    drawText(g_fSmall,
+        L"TrustedInstaller is above administrator: Windows doesn't stop what runs here from changing or deleting its own "
+        L"protected files and settings. A mistake can break Windows Update, Defender or the Start menu, or stop Windows from "
+        L"starting, and malware run this way gets the same power. Run only files you trust and understand, and consider "
+        L"making a restore point first.",
+        wb, textRGB(), DT_LEFT | DT_WORDBREAK);
+    y += wh + dp(14);
 
     // file box + Browse
     BOOL idle = (g_busy == 0);

